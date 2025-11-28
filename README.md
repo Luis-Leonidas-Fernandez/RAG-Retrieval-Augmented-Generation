@@ -8,6 +8,8 @@ Este sistema permite procesar documentos PDF, extraer su contenido, generar embe
 
 ## 📊 Diagramas de Arquitectura
 
+![Diagrama RAG](rag.png)
+
 ### Diagrama de Pipelines (DAG)
 
 El sistema utiliza múltiples pipelines interconectados para procesar documentos y responder consultas. Visualiza el flujo completo en:
