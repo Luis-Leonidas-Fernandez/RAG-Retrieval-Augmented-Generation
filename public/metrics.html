@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Métricas del Sistema - Vector RAG</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg1: #050816;
+      --bg2: #020617;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.25);
+      --card-bg: rgba(15, 23, 42, 0.9);
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --critical: #ef4444;
+      --shadow-strong: 0 25px 50px rgba(0, 0, 0, 0.7);
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #0b1220 0, #020617 55%, #000 100%);
+      color: var(--text-main);
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding: 20px;
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      background: linear-gradient(120deg, #e5e7eb, #38bdf8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #020617;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: var(--shadow-strong);
+    }
+
+    .metric-card h3 {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .metric-unit {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .metric-trend {
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+
+    .trend-up { color: var(--critical); }
+    .trend-down { color: var(--success); }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .chart-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: var(--shadow-strong);
+    }
+
+    .chart-card h2 {
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+      color: var(--text-main);
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+
+    .alerts-section {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: var(--shadow-strong);
+    }
+
+    .alerts-section h2 {
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+    }
+
+    .alert-item {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid;
+    }
+
+    .alert-warning {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: var(--warning);
+    }
+
+    .alert-critical {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: var(--critical);
+    }
+
+    .alert-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .connections-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .connection-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 8px;
+    }
+
+    .connection-status {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .status-connected { background: var(--success); }
+    .status-disconnected { background: var(--critical); }
+    .status-connecting { background: var(--warning); }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+
+    .error-message {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--critical);
+      color: white;
+      padding: 16px;
+      border-radius: 8px;
+      box-shadow: var(--shadow-strong);
+      z-index: 10000;
+      max-width: 400px;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      header {
+        flex-direction: column;
+        gap: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <h1>
+          <span class="status-indicator" id="statusIndicator"></span>
+          Dashboard de Métricas
+        </h1>
+        <span style="color: var(--text-muted);">|</span>
+        <span id="navUserName" style="color: var(--text-main); font-size: 0.9rem;"></span>
+      </div>
+      <div class="header-actions">
+        <button id="exportBtn">Exportar CSV</button>
+        <button id="exportJsonBtn">Exportar JSON</button>
+        <button id="homeBtn">Inicio</button>
+        <button id="logoutBtn" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">Cerrar Sesión</button>
+      </div>
+    </header>
+
+    <div class="metrics-grid" id="metricsGrid">
+      <div class="metric-card">
+        <h3>Memoria Heap Usada</h3>
+        <div class="metric-value" id="heapUsed">-</div>
+        <div class="metric-unit" id="heapUsedPercent">-</div>
+        <div class="metric-trend" id="heapTrend"></div>
+      </div>
+
+      <div class="metric-card">
+        <h3>Memoria Total</h3>
+        <div class="metric-value" id="heapTotal">-</div>
+        <div class="metric-unit">bytes</div>
+      </div>
+
+      <div class="metric-card">
+        <h3>RSS (Resident Set Size)</h3>
+        <div class="metric-value" id="rss">-</div>
+        <div class="metric-unit">bytes</div>
+      </div>
+
+      <div class="metric-card">
+        <h3>Uso de CPU</h3>
+        <div class="metric-value" id="cpuUsage">-</div>
+        <div class="metric-unit">%</div>
+        <div class="metric-trend" id="cpuTrend"></div>
+      </div>
+
+      <div class="metric-card">
+        <h3>Uptime</h3>
+        <div class="metric-value" id="uptime">-</div>
+        <div class="metric-unit">segundos</div>
+      </div>
+
+      <div class="metric-card">
+        <h3>Memoria Libre del Sistema</h3>
+        <div class="metric-value" id="freeMemory">-</div>
+        <div class="metric-unit">bytes</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h2>Memoria Heap (Últimas 50 muestras)</h2>
+        <div class="chart-container">
+          <canvas id="memoryChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h2>Uso de CPU (Últimas 50 muestras)</h2>
+        <div class="chart-container">
+          <canvas id="cpuChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="alerts-section">
+      <h2>Alertas Activas</h2>
+      <div id="alertsContainer">
+        <div class="loading">No hay alertas activas</div>
+      </div>
+    </div>
+
+    <div class="alerts-section" style="margin-top: 20px;">
+      <h2>Estado de Conexiones</h2>
+      <div class="connections-grid" id="connectionsGrid">
+        <div class="loading">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script de autenticación - debe ejecutarse primero -->
+  <script type="module">
+    import { checkAuth, getUser, logout, fetchWithAuth } from '/js/auth.js';
+
+    // Verificar autenticación al cargar
+    if (!checkAuth()) {
+      // checkAuth() redirige automáticamente a login si no hay token
+      // No hacer nada más aquí
+    }
+
+    // Configurar cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', () => {
+      // Mostrar nombre de usuario si está autenticado
+      const user = getUser();
+      if (user) {
+        const navUserName = document.getElementById('navUserName');
+        if (navUserName) {
+          navUserName.textContent = user.name || user.email;
+        }
+      }
+
+      // Configurar event listener para logout
+      const logoutButton = document.getElementById('logoutBtn');
+      if (logoutButton) {
+        logoutButton.addEventListener('click', (e) => {
+          e.preventDefault();
+          logout();
+        });
+      }
+    });
+
+    // Exportar fetchWithAuth para usar en el código inline
+    window.fetchWithAuth = fetchWithAuth;
+  </script>
+
+  <script type="module">
+    // fetchWithAuth ya está disponible globalmente desde el script de autenticación anterior
+
+    // Configuración
+    const UPDATE_INTERVAL = 5000; // 5 segundos (reducido de 3s para evitar sobrecarga)
+    const MAX_HISTORY_POINTS = 50;
+
+    // Datos para gráficos
+    let memoryChart = null;
+    let cpuChart = null;
+    let metricsHistory = [];
+    let lastHeapUsed = null;
+    let lastCpuUsage = null;
+
+    // Formatear bytes a formato legible
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // Formatear tiempo
+    function formatUptime(seconds) {
+      const days = Math.floor(seconds / 86400);
+      const hours = Math.floor((seconds % 86400) / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+      
+      if (days > 0) return `${days}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${minutes}m`;
+      if (minutes > 0) return `${minutes}m ${secs}s`;
+      return `${secs}s`;
+    }
+
+    // Inicializar gráficos
+    function initCharts() {
+      const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+      const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+
+      memoryChart = new Chart(memoryCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Heap Used',
+            data: [],
+            borderColor: '#38bdf8',
+            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+            tension: 0.4,
+            fill: true,
+          }, {
+            label: 'Heap Total',
+            data: [],
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            tension: 0.4,
+            fill: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#e5e7eb' }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } },
+            y: { 
+              ticks: { color: '#9ca3af', callback: (v) => formatBytes(v) }, 
+              grid: { color: 'rgba(148, 163, 184, 0.1)' },
+              min: 0,
+              max: 536870912 // 512 MB en bytes (se actualizará dinámicamente con heapLimit)
+            }
+          }
+        }
+      });
+
+      cpuChart = new Chart(cpuCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'CPU Usage %',
+            data: [],
+            borderColor: '#22c55e',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.4,
+            fill: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#e5e7eb' }
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(148, 163, 184, 0.1)' } },
+            y: { ticks: { color: '#9ca3af', callback: (v) => v + '%' }, grid: { color: 'rgba(148, 163, 184, 0.1)' }, min: 0, max: 100 }
+          }
+        }
+      });
+    }
+
+    // Función para mostrar errores al usuario
+    function showError(message) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 10000; max-width: 400px;';
+      errorDiv.textContent = message;
+      document.body.appendChild(errorDiv);
+      
+      setTimeout(() => {
+        errorDiv.remove();
+      }, 5000);
+    }
+
+    // Actualizar métricas
+    async function updateMetrics() {
+      try {
+        const response = await fetchWithAuth('/api/metrics/current');
+        
+        // Validar respuesta HTTP
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'No se pudo leer el error');
+          console.error('[Metrics Dashboard] Error HTTP:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Log para debug
+        console.log('[Metrics Dashboard] Respuesta recibida:', {
+          ok: data.ok,
+          hasMetrics: !!data.metrics,
+          metricsKeys: data.metrics ? Object.keys(data.metrics) : null,
+          memoryKeys: data.metrics?.memory ? Object.keys(data.metrics.memory) : null,
+          systemKeys: data.metrics?.system ? Object.keys(data.metrics.system) : null
+        });
+
+        if (!data.ok || !data.metrics) {
+          const errorMsg = data.message || 'Error al obtener métricas';
+          console.error('[Metrics Dashboard] Error:', errorMsg, data);
+          showError('No se pudieron cargar las métricas: ' + errorMsg);
+          document.getElementById('statusIndicator').style.background = '#ef4444';
+          return;
+        }
+
+        const m = data.metrics;
+        
+        // Validar estructura de métricas
+        if (!m.memory || !m.system || !m.process) {
+          console.error('[Metrics Dashboard] Estructura de métricas inválida:', m);
+          showError('Las métricas recibidas tienen una estructura inválida');
+          return;
+        }
+
+        // Actualizar tarjetas de métricas
+        document.getElementById('heapUsed').textContent = formatBytes(m.memory.heapUsed);
+        // Calcular porcentaje respecto al límite máximo del heap (no heapTotal)
+        const heapLimit = m.memory.heapLimit || m.memory.heapTotal; // Fallback por compatibilidad
+        const heapUsagePercent = ((m.memory.heapUsed / heapLimit) * 100).toFixed(2);
+        document.getElementById('heapUsedPercent').textContent = 
+          `${heapUsagePercent}% del límite máximo`;
+        
+        document.getElementById('heapTotal').textContent = formatBytes(m.memory.heapTotal);
+        document.getElementById('rss').textContent = formatBytes(m.memory.rss);
+        document.getElementById('cpuUsage').textContent = (m.system.cpuUsage || 0).toFixed(2);
+        document.getElementById('uptime').textContent = formatUptime(m.process.uptime);
+        document.getElementById('freeMemory').textContent = formatBytes(m.system.freeMemory);
+
+        // Tendencia de memoria
+        if (lastHeapUsed !== null) {
+          const diff = m.memory.heapUsed - lastHeapUsed;
+          const trend = diff > 0 ? '↑ Aumentando' : diff < 0 ? '↓ Disminuyendo' : '→ Estable';
+          const className = diff > 0 ? 'trend-up' : diff < 0 ? 'trend-down' : '';
+          document.getElementById('heapTrend').textContent = trend;
+          document.getElementById('heapTrend').className = 'metric-trend ' + className;
+        }
+        lastHeapUsed = m.memory.heapUsed;
+
+        // Tendencia de CPU
+        if (lastCpuUsage !== null) {
+          const diff = (m.system.cpuUsage || 0) - lastCpuUsage;
+          const trend = diff > 0 ? '↑ Aumentando' : diff < 0 ? '↓ Disminuyendo' : '→ Estable';
+          const className = diff > 0 ? 'trend-up' : diff < 0 ? 'trend-down' : '';
+          document.getElementById('cpuTrend').textContent = trend;
+          document.getElementById('cpuTrend').className = 'metric-trend ' + className;
+        }
+        lastCpuUsage = m.system.cpuUsage || 0;
+
+        // Agregar a historial
+        metricsHistory.push({
+          timestamp: new Date(m.timestamp),
+          heapUsed: m.memory.heapUsed,
+          heapTotal: m.memory.heapTotal,
+          heapLimit: m.memory.heapLimit || 536870912, // 512 MB en bytes como fallback
+          cpuUsage: m.system.cpuUsage || 0,
+        });
+
+        // Limitar historial
+        if (metricsHistory.length > MAX_HISTORY_POINTS) {
+          metricsHistory.shift();
+        }
+
+        // Actualizar gráficos
+        updateCharts();
+
+        // Actualizar alertas
+        updateAlerts(m.alerts || []);
+
+        // Actualizar conexiones
+        updateConnections(m.connections || {});
+        
+        // Indicador de éxito
+        document.getElementById('statusIndicator').style.background = '#22c55e';
+
+      } catch (error) {
+        console.error('[Metrics Dashboard] Error al actualizar métricas:', error);
+        showError('Error de conexión: ' + error.message);
+        document.getElementById('statusIndicator').style.background = '#ef4444';
+      }
+    }
+
+    // Actualizar gráficos
+    function updateCharts() {
+      const labels = metricsHistory.map(m => {
+        const d = new Date(m.timestamp);
+        return `${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+      });
+
+      // Obtener el heapLimit más reciente o usar 512 MB como fallback
+      const currentHeapLimit = metricsHistory.length > 0 
+        ? (metricsHistory[metricsHistory.length - 1].heapLimit || 536870912)
+        : 536870912;
+
+      // Actualizar el máximo del eje Y dinámicamente
+      if (memoryChart && memoryChart.options.scales && memoryChart.options.scales.y) {
+        memoryChart.options.scales.y.max = currentHeapLimit;
+      }
+
+      memoryChart.data.labels = labels;
+      memoryChart.data.datasets[0].data = metricsHistory.map(m => m.heapUsed);
+      memoryChart.data.datasets[1].data = metricsHistory.map(m => m.heapTotal);
+      memoryChart.update('none'); // Sin animación para actualización en tiempo real
+
+      cpuChart.data.labels = labels;
+      cpuChart.data.datasets[0].data = metricsHistory.map(m => m.cpuUsage);
+      cpuChart.update('none');
+    }
+
+    // Actualizar alertas
+    function updateAlerts(alerts) {
+      const container = document.getElementById('alertsContainer');
+      
+      if (alerts.length === 0) {
+        container.innerHTML = '<div class="loading">No hay alertas activas</div>';
+        return;
+      }
+
+      container.innerHTML = alerts.map(alert => `
+        <div class="alert-item alert-${alert.level}">
+          <strong>${alert.level.toUpperCase()}: ${alert.type}</strong>
+          <div>${alert.message}</div>
+          <div style="margin-top: 4px; font-size: 0.85rem; color: var(--text-muted);">
+            Valor: ${alert.value.toFixed(2)}% | Umbral: ${alert.threshold}%
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Actualizar conexiones
+    function updateConnections(connections) {
+      const grid = document.getElementById('connectionsGrid');
+      
+      const statusMap = {
+        'connected': { text: 'Conectado', class: 'status-connected' },
+        'disconnected': { text: 'Desconectado', class: 'status-disconnected' },
+        'connecting': { text: 'Conectando', class: 'status-connecting' },
+        'available': { text: 'Disponible', class: 'status-connected' },
+        'unavailable': { text: 'No Disponible', class: 'status-disconnected' },
+      };
+
+      grid.innerHTML = Object.entries(connections).map(([name, status]) => {
+        const statusInfo = statusMap[status] || statusMap['disconnected'];
+        return `
+          <div class="connection-item">
+            <div class="connection-status ${statusInfo.class}"></div>
+            <div>
+              <strong>${name.toUpperCase()}</strong>
+              <div style="font-size: 0.85rem; color: var(--text-muted);">${statusInfo.text}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Exportar métricas
+    async function exportMetrics(format) {
+      try {
+        const response = await fetchWithAuth(`/api/metrics/export?format=${format}&limit=1000`);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `metrics-${new Date().toISOString().split('T')[0]}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Error al exportar métricas:', error);
+        alert('Error al exportar métricas');
+      }
+    }
+
+    // Inicializar
+    document.addEventListener('DOMContentLoaded', () => {
+      initCharts();
+      updateMetrics(); // Primera actualización inmediata
+      
+      // Actualizar periódicamente
+      setInterval(updateMetrics, UPDATE_INTERVAL);
+
+      // Event listeners para exportar
+      document.getElementById('exportBtn').addEventListener('click', () => exportMetrics('csv'));
+      document.getElementById('exportJsonBtn').addEventListener('click', () => exportMetrics('json'));
+      
+      // Event listener para botón Inicio
+      document.getElementById('homeBtn').addEventListener('click', () => {
+        window.location.href = '/index.html';
+      });
+    });
+  </script>
+</body>
+</html>
+

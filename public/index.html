@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vector RAG Server</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg1: #050816;
+      --bg2: #020617;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.25);
+      --card-bg: rgba(15, 23, 42, 0.9);
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --shadow-strong: 0 25px 50px rgba(0, 0, 0, 0.7);
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #0b1220 0, #020617 55%, #000 100%);
+      color: var(--text-main);
+      overflow: hidden;
+    }
+
+    /* Canvas 3D Three.js */
+    #three {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Canvas de partículas */
+    #particles {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Glow en la parte inferior tipo Vercel */
+    .bottom-glow {
+      position: fixed;
+      inset-inline: 0;
+      bottom: -120px;
+      height: 260px;
+      background: radial-gradient(circle at center, #22d3ee33 0, transparent 60%);
+      filter: blur(18px);
+      opacity: 0.9;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Contenido principal */
+    .page-wrapper {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      position: relative;
+      max-width: 480px;
+      width: 100%;
+      padding: 28px 26px 26px;
+      border-radius: 18px;
+      background: radial-gradient(circle at top left, #0f172a 0, #020617 45%, #020617 100%);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: var(--shadow-strong);
+      overflow: hidden;
+    }
+
+    /* Borde animado suave */
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: inherit;
+      background: conic-gradient(
+        from 180deg,
+        #22d3ee22,
+        #38bdf833,
+        #a855f733,
+        #22d3ee22
+      );
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      padding: 1px;
+      opacity: 0.7;
+      animation: border-rotate 8s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes border-rotate {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 10px #22c55eaa;
+    }
+
+    .badge-pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      background: rgba(56, 189, 248, 0.08);
+      color: #7dd3fc;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 30%, #e0f2fe, #38bdf8, #0ea5e9);
+      box-shadow:
+        0 0 12px #38bdf8cc,
+        0 0 28px #22d3ee55;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .status-pill {
+      flex: 1 1 160px;
+      min-width: 0;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(51, 65, 85, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.8rem;
+    }
+
+    .status-label {
+      color: var(--text-muted);
+    }
+
+    .status-value {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      color: #e5e7eb;
+    }
+
+    .status-dot-live {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow:
+        0 0 8px #22c55e,
+        0 0 18px #22c55e44;
+      animation: ping 1.5s infinite;
+    }
+
+    @keyframes ping {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      75% {
+        transform: scale(1.8);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1.8);
+        opacity: 0;
+      }
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .meta-row span strong {
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .btn-primary {
+      flex: 1 1 140px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      background: radial-gradient(circle at 20% 0%, #e0f2fe 0, #38bdf8 35%, #0ea5e9 100%);
+      color: #020617;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      box-shadow:
+        0 15px 30px rgba(8, 47, 73, 0.7),
+        0 0 18px rgba(56, 189, 248, 0.7);
+      transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
+        filter 0.12s ease-out;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px) scale(1.01);
+      filter: brightness(1.04);
+      box-shadow:
+        0 18px 40px rgba(8, 47, 73, 0.85),
+        0 0 22px rgba(56, 189, 248, 0.95);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px) scale(0.99);
+      box-shadow:
+        0 10px 20px rgba(8, 47, 73, 0.7),
+        0 0 16px rgba(56, 189, 248, 0.7);
+    }
+
+    .btn-secondary {
+      flex: 1 1 120px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-main);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s ease-out, border-color 0.15s ease-out,
+        transform 0.1s ease-out;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(15, 23, 42, 1);
+      border-color: rgba(148, 163, 184, 0.9);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary span.mono {
+      font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+      font-size: 0.75rem;
+      opacity: 0.9;
+    }
+
+    .shortcuts {
+      margin-top: 14px;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      align-items: center;
+    }
+
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.9);
+      font-size: 0.7rem;
+      font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+      color: #e5e7eb;
+    }
+
+    @media (max-width: 480px) {
+      .card {
+        padding: 22px 18px 18px;
+      }
+
+      h1 {
+        font-size: 1.3rem;
+      }
+
+      .status-row {
+        flex-direction: column;
+      }
+
+      .button-row {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 👇 NUEVO: canvas 3D -->
+  <canvas id="three"></canvas>
+
+  <!-- ya lo tenías -->
+  <canvas id="particles"></canvas>
+  <div class="bottom-glow"></div>
+
+  <div class="page-wrapper">
+    <div class="card" id="dashboardCard" style="display: none;">
+      <div class="badge">
+        <span class="badge-dot"></span>
+        Bienvenido
+        <span class="badge-pill" id="userRole">Usuario</span>
+      </div>
+
+      <div class="title-row">
+        <h1>
+          <span class="logo-dot"></span>
+          Vector Database RAG
+        </h1>
+      </div>
+
+      <p class="subtitle">
+        Hola, <strong id="userName">Usuario</strong>. Accede a las herramientas para gestionar tus documentos.
+      </p>
+
+      <div class="button-row" style="flex-direction: column; gap: 12px;">
+        <button class="btn-primary" id="pdfsBtn">
+          <span>Gestionar PDFs</span>
+        </button>
+        <button class="btn-primary" id="ragBtn">
+          <span>Consultar con RAG</span>
+        </button>
+        <button class="btn-primary" id="metricsBtn">
+          <span>Ver Métricas del Sistema</span>
+        </button>
+      </div>
+
+      <div class="shortcuts" style="justify-content: center; margin-top: 20px;">
+        <button class="btn-secondary" id="logoutBtn" style="width: 100%;">
+          Cerrar Sesión
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script de autenticación - debe ejecutarse primero -->
+  <script type="module">
+    import { checkAuth, getUser, logout } from '/js/auth.js';
+
+    // Verificar autenticación al cargar - esto se ejecuta antes que el resto
+    if (!checkAuth()) {
+      // checkAuth() redirige automáticamente a login si no hay token
+      // No hacer nada más aquí
+    } else {
+      // Mostrar dashboard solo si está autenticado
+      document.addEventListener('DOMContentLoaded', () => {
+        const user = getUser();
+        if (user) {
+          document.getElementById('dashboardCard').style.display = 'block';
+          document.getElementById('userName').textContent = user.name || user.email;
+          if (user.role === 'admin') {
+            document.getElementById('userRole').textContent = 'Admin';
+          }
+        }
+      });
+    }
+
+    // Configurar event listeners cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', () => {
+      // Botón de PDFs
+      const pdfsBtn = document.getElementById('pdfsBtn');
+      if (pdfsBtn) {
+        pdfsBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.location.href = '/pdfs.html';
+        });
+      }
+
+      // Botón de RAG
+      const ragBtn = document.getElementById('ragBtn');
+      if (ragBtn) {
+        ragBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.location.href = '/rag.html';
+        });
+      }
+
+      // Botón de Métricas
+      const metricsBtn = document.getElementById('metricsBtn');
+      if (metricsBtn) {
+        metricsBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.location.href = '/metrics.html';
+        });
+      }
+
+      // Botón de logout
+      const logoutButton = document.getElementById('logoutBtn');
+      if (logoutButton) {
+        logoutButton.addEventListener('click', (e) => {
+          e.preventDefault();
+          logout();
+        });
+      }
+    });
+  </script>
+
+  <!-- Script de partículas que ya tenías -->
+  <script>
+    // --- Partículas estilo "Vercel vibes" ---
+    const canvas = document.getElementById("particles");
+    const ctx = canvas.getContext("2d");
+
+    let width, height, particles;
+    let particleAnimationId = null; // Guardar ID para poder cancelarlo
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      createParticles();
+    }
+
+    window.addEventListener("resize", resize);
+
+    function createParticles() {
+      const count = Math.floor((width + height) / 25);
+      particles = [];
+
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: (Math.random() - 0.5) * 0.5,
+          r: Math.random() * 2.2 + 0.6,
+          alpha: Math.random() * 0.6 + 0.15
+        });
+      }
+    }
+
+    function draw() {
+      // Verificar si la página está visible antes de animar
+      if (document.hidden) {
+        particleAnimationId = null;
+        return;
+      }
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#0b1120";
+      ctx.fillRect(0, 0, width, height);
+
+      // líneas suaves entre partículas cercanas
+      for (let i = 0; i < particles.length; i++) {
+        const p1 = particles[i];
+
+        for (let j = i + 1; j < particles.length; j++) {
+          const p2 = particles[j];
+          const dx = p1.x - p2.x;
+          const dy = p1.y - p2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 120) {
+            const alpha = (1 - dist / 120) * 0.25;
+            ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // partículas
+      for (const p of particles) {
+        ctx.beginPath();
+        const gradient = ctx.createRadialGradient(
+          p.x,
+          p.y,
+          0,
+          p.x,
+          p.y,
+          p.r * 3
+        );
+        gradient.addColorStop(0, `rgba(125, 211, 252, ${p.alpha})`);
+        gradient.addColorStop(1, "rgba(15,23,42,0)");
+        ctx.fillStyle = gradient;
+        ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < -50) p.x = width + 50;
+        if (p.x > width + 50) p.x = -50;
+        if (p.y < -50) p.y = height + 50;
+        if (p.y > height + 50) p.y = -50;
+      }
+
+      particleAnimationId = requestAnimationFrame(draw);
+    }
+
+    // Función para detener animación de partículas
+    function stopParticleAnimation() {
+      if (particleAnimationId !== null) {
+        cancelAnimationFrame(particleAnimationId);
+        particleAnimationId = null;
+      }
+    }
+
+    // Iniciar animación
+    resize();
+    particleAnimationId = requestAnimationFrame(draw);
+
+    // Limpiar cuando la página se desmonta
+    window.addEventListener('beforeunload', stopParticleAnimation);
+
+    // Pausar cuando la página pierde visibilidad
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopParticleAnimation();
+      } else {
+        if (particleAnimationId === null) {
+          particleAnimationId = requestAnimationFrame(draw);
+        }
+      }
+    });
+
+    // Copiar curl al portapapeles
+    function copyCurl() {
+      const text = "curl http://localhost:3000/api/health";
+      navigator.clipboard.writeText(text).then(
+        () => {
+          alert("Comando copiado al portapapeles:\n" + text);
+        },
+        () => {
+          alert("No se pudo copiar el comando. Copialo a mano:\n" + text);
+        }
+      );
+    }
+  </script>
+
+  <!-- 👇 Script Three.js 3D -->
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/controls/OrbitControls.js";
+
+    const canvasThree = document.getElementById("three");
+    const renderer = new THREE.WebGLRenderer({
+      canvas: canvasThree,
+      alpha: true,
+      antialias: true,
+    });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      50,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+    camera.position.set(0, 0, 3);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.enableRotate = false;
+
+    const light1 = new THREE.PointLight(0x38bdf8, 1.6);
+    light1.position.set(4, 4, 4);
+    scene.add(light1);
+
+    const light2 = new THREE.PointLight(0x2563eb, 1);
+    light2.position.set(-4, -2, -3);
+    scene.add(light2);
+
+    const geometry = new THREE.IcosahedronGeometry(1.2, 1);
+    const wireframe = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      wireframe: true,
+      opacity: 0.4,
+      transparent: true,
+    });
+
+    const mesh = new THREE.Mesh(geometry, wireframe);
+    scene.add(mesh);
+
+    let threeAnimationId = null; // Guardar ID para poder cancelarlo
+
+    function animate() {
+      // Verificar si la página está visible antes de animar
+      if (document.hidden) {
+        threeAnimationId = null;
+        return;
+      }
+
+      mesh.rotation.x += 0.002;
+      mesh.rotation.y += 0.0035;
+      renderer.render(scene, camera);
+      threeAnimationId = requestAnimationFrame(animate);
+    }
+
+    // Función para detener animación de Three.js
+    function stopThreeAnimation() {
+      if (threeAnimationId !== null) {
+        cancelAnimationFrame(threeAnimationId);
+        threeAnimationId = null;
+      }
+    }
+
+    // Iniciar animación
+    threeAnimationId = requestAnimationFrame(animate);
+
+    window.addEventListener("resize", () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+    // Limpiar cuando la página se desmonta (ya tenemos listener global, pero por si acaso)
+    window.addEventListener('beforeunload', stopThreeAnimation);
+
+    // Pausar cuando la página pierde visibilidad
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopThreeAnimation();
+      } else {
+        if (threeAnimationId === null) {
+          threeAnimationId = requestAnimationFrame(animate);
+        }
+      }
+    });
+  </script>
+</body>
+</html>

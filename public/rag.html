@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat con PDFs (RAG)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-main: #020617;
+      --card-bg: #020617f2;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.12);
+      --accent-2: #8b5cf6;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --surface-soft: #020617;
+      --radius-lg: 16px;
+      --radius-full: 999px;
+      --shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.7);
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #020617 0, #020617 40%, #020617 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    .bg-aurora {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      overflow: hidden;
+      pointer-events: none;
+      background: radial-gradient(circle at top, #020617 0, #020617 40%, #000 100%);
+    }
+
+    .aurora-blob {
+      position: absolute;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      filter: blur(60px);
+      opacity: 0.65;
+      mix-blend-mode: screen;
+      animation: float 18s ease-in-out infinite alternate;
+    }
+
+    .aurora-blob:nth-child(1) {
+      background: #4c1d95;
+      top: -80px;
+      left: -120px;
+      animation-delay: 0s;
+    }
+
+    .aurora-blob:nth-child(2) {
+      background: #0369a1;
+      top: 40%;
+      right: -140px;
+      animation-delay: 3s;
+    }
+
+    .aurora-blob:nth-child(3) {
+      background: #15803d;
+      bottom: -160px;
+      left: 10%;
+      animation-delay: 6s;
+    }
+
+    @keyframes float {
+      0% {
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+      50% {
+        transform: translate3d(20px, -20px, 0) scale(1.05);
+      }
+      100% {
+        transform: translate3d(-10px, 20px, 0) scale(1.1);
+      }
+    }
+
+    .page-shell {
+      width: 100%;
+      max-width: 1024px;
+      margin: 0 auto;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 24px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: var(--shadow-soft);
+      padding: 18px 18px 20px;
+      backdrop-filter: blur(24px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.07), transparent 55%);
+      opacity: 0.7;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.02em;
+      background: linear-gradient(120deg, #e5e7eb, #c4b5fd, #38bdf8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+    }
+
+    .sidebar-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin: 0 0 8px;
+    }
+
+    .sidebar-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 400px;
+      overflow: auto;
+      font-size: 13px;
+    }
+
+    .pdf-item {
+      padding: 8px 9px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      margin-bottom: 6px;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .pdf-item:hover {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: rgba(55, 65, 81, 0.8);
+      transform: translateY(-1px);
+    }
+
+    .pdf-item.selected {
+      background: rgba(15, 23, 42, 0.98);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.6);
+    }
+
+    .pdf-name {
+      font-size: 13px;
+    }
+
+    .pdf-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      color: var(--text-main);
+      text-transform: lowercase;
+      letter-spacing: 0.03em;
+    }
+
+    .tag::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      margin-right: 5px;
+      background: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+    }
+
+    .tag.pending::before {
+      background: #eab308;
+      box-shadow: 0 0 0 4px rgba(234, 179, 8, 0.18);
+    }
+
+    .tag.error::before {
+      background: #ef4444;
+      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18);
+    }
+
+    .status-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .chat-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .chat-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-right: 10px;
+    }
+
+    .chat-meta-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+    }
+
+    .question-area {
+      margin-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 80px;
+      max-height: 160px;
+      resize: vertical;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: rgba(15, 23, 42, 0.98);
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.45);
+    }
+
+    .actions-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+
+    button {
+      padding: 7px 16px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--accent);
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: #020617;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(56, 189, 248, 0.25);
+      border-color: #7dd3fc;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .status-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .results-box {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: rgba(15, 23, 42, 0.95);
+      font-size: 13px;
+      max-height: none;
+      overflow: visible;
+      transition: all 0.3s ease-in-out;
+      min-height: 0;
+    }
+
+    /* Contenedor interno para scroll cuando sea necesario */
+    .answer-content-wrapper {
+      max-height: 70vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 4px;
+      scroll-behavior: smooth;
+    }
+
+    .answer-content-wrapper::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .answer-content-wrapper::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 4px;
+    }
+
+    .answer-content-wrapper::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.4);
+      border-radius: 4px;
+    }
+
+    .answer-content-wrapper::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.6);
+    }
+
+    .answer-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0 0 4px;
+    }
+
+    .answer-text {
+      line-height: 1.7;
+      font-size: 14px;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    /* Estilos para contenido formateado dentro de la respuesta */
+    .answer-text h1,
+    .answer-text h2,
+    .answer-text h3 {
+      color: var(--text-main);
+      font-weight: 600;
+      margin-top: 20px;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    .answer-text h1 {
+      font-size: 22px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+      padding-bottom: 8px;
+      margin-top: 0;
+    }
+
+    .answer-text h2 {
+      font-size: 18px;
+      color: var(--accent);
+      margin-top: 24px;
+    }
+
+    .answer-text h3 {
+      font-size: 16px;
+      margin-top: 18px;
+      color: var(--text-main);
+    }
+
+    .answer-text h1:first-child,
+    .answer-text h2:first-child,
+    .answer-text h3:first-child {
+      margin-top: 0;
+    }
+
+    .answer-text p {
+      margin: 10px 0;
+      line-height: 1.8;
+    }
+
+    .answer-text ul,
+    .answer-text ol {
+      margin: 12px 0;
+      padding-left: 28px;
+      line-height: 1.9;
+    }
+
+    .answer-text li {
+      margin: 8px 0;
+      padding-left: 4px;
+    }
+
+    .answer-text ul li {
+      list-style-type: disc;
+    }
+
+    .answer-text ol li {
+      list-style-type: decimal;
+    }
+
+    .answer-text strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .answer-text code {
+      background: rgba(15, 23, 42, 0.8);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+      color: var(--accent);
+    }
+
+    .context-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 4px 0 2px;
+    }
+
+    .context-list {
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .context-list li {
+      margin-bottom: 4px;
+    }
+
+    .context-list code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-aurora">
+    <div class="aurora-blob"></div>
+    <div class="aurora-blob"></div>
+    <div class="aurora-blob"></div>
+  </div>
+
+  <!-- Navbar -->
+  <nav style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding: 12px 24px;">
+    <div style="max-width: 1024px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <a href="/index.html" style="color: var(--accent); text-decoration: none; font-weight: 600;">Vector RAG</a>
+        <span style="color: var(--text-muted);">|</span>
+        <span id="navUserName" style="color: var(--text-main); font-size: 0.9rem;"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <a href="/pdfs.html" style="color: var(--text-main); text-decoration: none; font-size: 0.9rem; padding: 6px 12px; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.1)'" onmouseout="this.style.background='transparent'">PDFs</a>
+        <button id="logoutBtn" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.1)'" onmouseout="this.style.background='transparent'">Cerrar Sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page-shell" style="margin-top: 60px;">
+    <div class="card" style="margin-bottom: 14px;">
+      <h1>Chat con tus PDFs (RAG)</h1>
+      <p class="subtitle">
+        Elige un PDF ya procesado y embebido en Qdrant y hazle preguntas en lenguaje natural.
+      </p>
+      <div class="pill">
+        <span class="pill-dot"></span>
+        Primero sube/procesa/embebe los PDFs en <code>pdfs.html</code>, luego chatea aquí.
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Lateral: lista de PDFs -->
+      <div class="card">
+        <p class="sidebar-title">PDFs disponibles</p>
+        <p class="status-text" id="pdf-list-status">Cargando lista de PDFs...</p>
+        <ul id="pdf-list" class="sidebar-list"></ul>
+      </div>
+
+      <!-- Panel de chat RAG -->
+      <div class="card">
+        <div class="chat-header">
+          <div>
+            <p class="sidebar-title">Preguntas al PDF seleccionado</p>
+            <p class="chat-meta" id="chat-meta">
+              <span><span class="chat-meta-dot"></span> Esperando selección de PDF</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="question-area">
+          <textarea
+            id="question-input"
+            placeholder="Ejemplo: ¿Cuál es el objetivo principal de este documento?"
+          ></textarea>
+          <div class="actions-row">
+            <span class="status-label" id="rag-status"></span>
+            <button id="ask-btn" type="button">
+              <span>Preguntar al PDF</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="results" class="results-box" style="display: none;">
+          <p class="answer-title">Respuesta:</p>
+          <div class="answer-content-wrapper">
+            <div id="answer-text" class="answer-text"></div>
+          </div>
+          <p class="context-title" style="display: none;">Fragmentos usados como contexto:</p>
+          <ul id="context-list" class="context-list" style="display: none;"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script de autenticación -->
+  <script type="module">
+    import { checkAuth, getUser, logout, fetchWithAuth } from '/js/auth.js';
+
+    // Verificar autenticación al cargar
+    if (!checkAuth()) {
+      // Redirigirá automáticamente a login
+    } else {
+      // Mostrar nombre de usuario en navbar
+      const user = getUser();
+      if (user) {
+        document.getElementById('navUserName').textContent = user.name || user.email;
+      }
+    }
+
+    // Configurar event listener para logout cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', () => {
+      const logoutButton = document.getElementById('logoutBtn');
+      if (logoutButton) {
+        logoutButton.addEventListener('click', (e) => {
+          e.preventDefault();
+          logout();
+        });
+      }
+    });
+
+    // Exportar fetchWithAuth para usar en el código inline
+    window.fetchWithAuth = fetchWithAuth;
+  </script>
+
+  <script>
+    let pdfList = [];
+    let selectedPdfId = null;
+
+    async function loadPdfs() {
+      const statusEl = document.getElementById("pdf-list-status");
+      const listEl = document.getElementById("pdf-list");
+      statusEl.textContent = "Cargando lista de PDFs...";
+      listEl.innerHTML = "";
+
+      try {
+        const res = await fetchWithAuth("/api/pdf");
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.message || "Error al obtener la lista de PDFs.");
+        }
+
+        pdfList = Array.isArray(data.pdfs) ? data.pdfs : [];
+
+        if (!pdfList.length) {
+          statusEl.textContent = "No hay PDFs subidos aún.";
+          return;
+        }
+
+        // Filtramos por PDFs procesados (opcional: podrías mostrar todos)
+        const processed = pdfList.filter((pdf) => pdf.status === "processed");
+        if (!processed.length) {
+          statusEl.textContent =
+            "No hay PDFs con estado 'processed'. Ve a pdfs.html, procésalos y envíalos a Qdrant primero.";
+          return;
+        }
+
+        statusEl.textContent = "Selecciona un PDF para empezar a preguntar.";
+        listEl.innerHTML = "";
+
+        processed.forEach((pdf) => {
+          const li = document.createElement("li");
+          li.className = "pdf-item";
+          li.dataset.id = pdf._id;
+
+          const sizeKb = pdf.size ? (pdf.size / 1024).toFixed(1) + " KB" : "";
+          const createdAt = pdf.createdAt
+            ? new Date(pdf.createdAt).toLocaleString()
+            : "-";
+
+          const tagClass = pdf.status === "processed" ? "" : " pending";
+
+          li.innerHTML = `
+            <div class="pdf-name">${pdf.originalName || pdf.fileName || pdf._id}</div>
+            <div class="pdf-meta">
+              <span>${sizeKb}</span>
+              <span>${createdAt}</span>
+            </div>
+            <div class="pdf-meta">
+              <span class="tag${tagClass}">${pdf.status || "uploaded"}</span>
+              <span style="margin-left:auto; font-size:11px; color:var(--text-muted);">ID corto: ${String(
+                pdf._id
+              ).slice(0, 6)}...</span>
+            </div>
+          `;
+
+          li.addEventListener("click", () => handleSelectPdf(pdf._id));
+          listEl.appendChild(li);
+        });
+
+        // Seleccionar por defecto el primero
+        if (!selectedPdfId && processed.length > 0) {
+          handleSelectPdf(processed[0]._id);
+        }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error al cargar la lista de PDFs: " + err.message;
+      }
+    }
+
+    function handleSelectPdf(pdfId) {
+      selectedPdfId = pdfId;
+
+      const listEl = document.getElementById("pdf-list");
+      const items = listEl.querySelectorAll(".pdf-item");
+      items.forEach((item) => {
+        if (item.dataset.id === pdfId) {
+          item.classList.add("selected");
+        } else {
+          item.classList.remove("selected");
+        }
+      });
+
+      const pdf = pdfList.find((p) => p._id === pdfId);
+      const metaEl = document.getElementById("chat-meta");
+      if (pdf) {
+        metaEl.innerHTML = `
+          <span><span class="chat-meta-dot"></span> Preguntando a: <strong>${
+            pdf.originalName || pdf.fileName || pdf._id
+          }</strong></span>
+          <span>Estado: <code>${pdf.status || "uploaded"}</code></span>
+        `;
+      } else {
+        metaEl.innerHTML =
+          '<span><span class="chat-meta-dot"></span> Esperando selección de PDF</span>';
+      }
+    }
+
+    // Función para convertir Markdown básico a HTML
+    function formatMarkdownToHtml(text) {
+      if (!text) return "";
+      
+      // Escapar HTML básico primero para seguridad
+      const escapeHtml = (str) => {
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
+      
+      let html = escapeHtml(text);
+      
+      // Convertir negritas (**texto** -> <strong>texto</strong>)
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      
+      // Dividir en líneas para procesar
+      const lines = html.split('\n');
+      const output = [];
+      let currentList = null;
+      let currentListType = null;
+      
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (!line) {
+          if (currentList) {
+            output.push(`</${currentListType}>`);
+            currentList = null;
+            currentListType = null;
+          }
+          continue;
+        }
+        
+        // Detectar títulos
+        if (line.match(/^###\s+(.+)$/)) {
+          if (currentList) {
+            output.push(`</${currentListType}>`);
+            currentList = null;
+            currentListType = null;
+          }
+          output.push(`<h3>${line.replace(/^###\s+/, '').trim()}</h3>`);
+          continue;
+        }
+        
+        if (line.match(/^##\s+(.+)$/)) {
+          if (currentList) {
+            output.push(`</${currentListType}>`);
+            currentList = null;
+            currentListType = null;
+          }
+          output.push(`<h2>${line.replace(/^##\s+/, '').trim()}</h2>`);
+          continue;
+        }
+        
+        if (line.match(/^#\s+(.+)$/)) {
+          if (currentList) {
+            output.push(`</${currentListType}>`);
+            currentList = null;
+            currentListType = null;
+          }
+          output.push(`<h1>${line.replace(/^#\s+/, '').trim()}</h1>`);
+          continue;
+        }
+        
+        // Detectar listas numeradas (1. texto o 10. texto)
+        const numberedMatch = line.match(/^(\d+)\.\s+(.+)$/);
+        if (numberedMatch) {
+          if (currentListType !== 'ol') {
+            if (currentList) {
+              output.push(`</${currentListType}>`);
+            }
+            output.push('<ol>');
+            currentList = true;
+            currentListType = 'ol';
+          }
+          output.push(`<li>${numberedMatch[2].trim()}</li>`);
+          continue;
+        }
+        
+        // Detectar listas con guiones (- texto)
+        const bulletMatch = line.match(/^-\s+(.+)$/);
+        if (bulletMatch) {
+          if (currentListType !== 'ul') {
+            if (currentList) {
+              output.push(`</${currentListType}>`);
+            }
+            output.push('<ul>');
+            currentList = true;
+            currentListType = 'ul';
+          }
+          output.push(`<li>${bulletMatch[1].trim()}</li>`);
+          continue;
+        }
+        
+        // Si llegamos aquí, es texto normal
+        if (currentList) {
+          output.push(`</${currentListType}>`);
+          currentList = null;
+          currentListType = null;
+        }
+        
+        // Convertir a párrafo si no está vacío
+        if (line) {
+          output.push(`<p>${line}</p>`);
+        }
+      }
+      
+      // Cerrar lista abierta si existe
+      if (currentList) {
+        output.push(`</${currentListType}>`);
+      }
+      
+      html = output.join('\n');
+      
+      // Limpiar párrafos vacíos
+      html = html.replace(/<p>\s*<\/p>/g, '');
+      
+      return html;
+    }
+
+    async function sendQuestion() {
+      const questionInput = document.getElementById("question-input");
+      const statusEl = document.getElementById("rag-status");
+      const askBtn = document.getElementById("ask-btn");
+      const resultsBox = document.getElementById("results");
+      const answerEl = document.getElementById("answer-text");
+      const contextEl = document.getElementById("context-list");
+
+      const question = (questionInput.value || "").trim();
+
+      if (!selectedPdfId) {
+        statusEl.textContent = "Selecciona un PDF primero en la lista de la izquierda.";
+        return;
+      }
+
+      if (!question) {
+        statusEl.textContent = "Escribe una pregunta antes de enviar.";
+        return;
+      }
+
+      try {
+        statusEl.textContent = "Consultando RAG...";
+        askBtn.disabled = true;
+        
+        // Limpiar respuesta anterior y mostrar área de resultados con animación
+        answerEl.innerHTML = "";
+        resultsBox.style.display = "block";
+        // Forzar reflow para que la animación funcione
+        resultsBox.offsetHeight;
+
+        const res = await fetchWithAuth("/api/rag/query", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            pdfId: selectedPdfId,
+            question,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.message || "Error en la consulta RAG");
+        }
+
+        statusEl.textContent = "Respuesta recibida.";
+        
+        // Procesar la respuesta para convertir Markdown básico a HTML
+        const formattedAnswer = formatMarkdownToHtml(data.answer || "(sin respuesta)");
+        
+        // Mostrar la respuesta con efecto suave
+        answerEl.innerHTML = formattedAnswer;
+        
+        // Auto-scroll al final del contenido después de renderizar
+        setTimeout(() => {
+          const wrapper = document.querySelector('.answer-content-wrapper');
+          if (wrapper) {
+            wrapper.scrollTop = wrapper.scrollHeight;
+          }
+          // También hacer scroll suave de la página si es necesario
+          resultsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+
+        // Sección de contexto oculta - no procesar chunks
+        // contextEl.innerHTML = "";
+        // const ctx = Array.isArray(data.context) ? data.context : [];
+        // if (!ctx.length) {
+        //   const li = document.createElement("li");
+        //   li.textContent = "No se devolvió contexto.";
+        //   contextEl.appendChild(li);
+        // } else {
+        //   ctx.slice(0, 4).forEach((chunk, idx) => {
+        //     const li = document.createElement("li");
+        //     const preview = (chunk.content || "")
+        //       .slice(0, 200)
+        //       .replace(/\s+/g, " ");
+        //     li.innerHTML = `<strong>#${idx + 1}${
+        //       typeof chunk.index === "number" ? ` (chunk ${chunk.index})` : ""
+        //     }:</strong> <code>${preview}...</code>`;
+        //     contextEl.appendChild(li);
+        //   });
+        // }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error al consultar RAG: " + err.message;
+        answerEl.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
+        resultsBox.style.display = "block";
+      } finally {
+        askBtn.disabled = false;
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const askBtn = document.getElementById("ask-btn");
+      askBtn.addEventListener("click", sendQuestion);
+
+      const questionInput = document.getElementById("question-input");
+      questionInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          sendQuestion();
+        }
+      });
+
+      loadPdfs();
+    });
+  </script>
+</body>
+</html>
+
+
