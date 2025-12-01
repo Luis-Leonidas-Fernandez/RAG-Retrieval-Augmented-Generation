@@ -48,21 +48,38 @@ export const register = async (req, res) => {
       email: email.toLowerCase(),
       password,
       name,
+      emailVerified: false,
     });
 
-    // Generar token JWT
-    const token = user.generateAuthToken();
+    // Generar token de verificación
+    const verificationToken = user.generateVerificationToken();
+    await user.save();
 
-    // Crear sesión activa en Redis (async, no bloquea)
-    createActiveSession(user.tenantId.toString(), user._id.toString(), token, req).catch((err) => {
-      console.error("[AUTH] Error al crear sesión activa:", err);
-    });
+    // Enviar email de verificación (async, no bloquea)
+    const { sendVerificationEmail } = await import("../services/email.service.js");
+    sendVerificationEmail(user.email, user.name, verificationToken)
+      .then((result) => {
+        console.log("[REGISTER] ✅ Email enviado exitosamente:", result);
+      })
+      .catch((err) => {
+        console.error("[REGISTER] ❌ Error al enviar email de verificación:");
+        console.error("[REGISTER] Error completo:", err);
+        console.error("[REGISTER] Mensaje:", err.message);
+        if (err.stack) {
+          console.error("[REGISTER] Stack:", err.stack);
+        }
+        // Verificar variables de entorno
+        console.error("[REGISTER] RESEND_API_KEY existe:", !!process.env.RESEND_API_KEY);
+        console.error("[REGISTER] RESEND_FROM:", process.env.RESEND_FROM || "NO CONFIGURADA");
+        console.error("[REGISTER] RESEND_FROM_EMAIL:", process.env.RESEND_FROM_EMAIL || "NO CONFIGURADA");
+      });
 
-    // Respuesta sin password
+    // NO generar JWT hasta que el email esté verificado
+    // Respuesta sin password y sin tokens de verificación
     const userResponse = user.toJSON();
     return res.status(201).json(
-      createResponse(true, "Usuario registrado correctamente", {
-        token,
+      createResponse(true, "Registro exitoso. Revisa tu correo para verificar tu email.", {
+        requiresVerification: true,
         user: userResponse,
       })
     );
@@ -126,6 +143,16 @@ export const login = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json(
         createResponse(false, "Credenciales inválidas")
+      );
+    }
+
+    // Verificar que el email esté verificado
+    if (!user.emailVerified) {
+      return res.status(403).json(
+        createResponse(false, "Por favor verifica tu email antes de iniciar sesión", {
+          requiresVerification: true,
+          email: user.email,
+        })
       );
     }
 
@@ -244,6 +271,108 @@ export const updateProfile = async (req, res) => {
 
     return res.status(500).json(
       createResponse(false, "Error interno del servidor al actualizar perfil")
+    );
+  }
+};
+
+/**
+ * Verificar email del usuario
+ */
+export const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json(
+        createResponse(false, "Token de verificación requerido")
+      );
+    }
+
+    // Buscar usuario con el token de verificación usando método estático
+    const user = await UserModel.verifyEmailToken(token);
+
+    if (!user) {
+      return res.status(400).json(
+        createResponse(false, "Token de verificación inválido o expirado")
+      );
+    }
+
+    // Marcar email como verificado y limpiar token
+    user.emailVerified = true;
+    user.verificationToken = undefined;
+    user.verificationTokenExpires = undefined;
+    await user.save();
+
+    // Generar token JWT ahora que el email está verificado
+    const authToken = user.generateAuthToken();
+
+    // Crear sesión activa
+    createActiveSession(user.tenantId.toString(), user._id.toString(), authToken, req).catch((err) => {
+      console.error("[VERIFY] Error al crear sesión activa:", err);
+    });
+
+    const userResponse = user.toJSON();
+
+    return res.json(
+      createResponse(true, "Email verificado correctamente", {
+        token: authToken,
+        user: userResponse,
+      })
+    );
+  } catch (error) {
+    console.error("[VERIFY] Error al verificar email:", error);
+    return res.status(500).json(
+      createResponse(false, "Error interno del servidor al verificar email")
+    );
+  }
+};
+
+/**
+ * Reenviar email de verificación
+ */
+export const resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json(
+        createResponse(false, "Email requerido")
+      );
+    }
+
+    // Buscar usuario
+    const user = await UserModel.findOne({ email: email.toLowerCase() })
+      .select("+verificationToken +verificationTokenExpires");
+
+    if (!user) {
+      // Por seguridad, no revelar si el email existe o no
+      return res.json(
+        createResponse(true, "Si el email existe y no está verificado, se enviará un nuevo email de verificación")
+      );
+    }
+
+    // Si ya está verificado, no hacer nada
+    if (user.emailVerified) {
+      return res.json(
+        createResponse(true, "El email ya está verificado")
+      );
+    }
+
+    // Generar nuevo token de verificación
+    const verificationToken = user.generateVerificationToken();
+    await user.save();
+
+    // Enviar email
+    const { resendVerificationEmail } = await import("../services/email.service.js");
+    await resendVerificationEmail(user.email, user.name, verificationToken);
+
+    return res.json(
+      createResponse(true, "Email de verificación reenviado correctamente")
+    );
+  } catch (error) {
+    console.error("[RESEND] Error al reenviar email:", error);
+    return res.status(500).json(
+      createResponse(false, "Error interno del servidor al reenviar email")
     );
   }
 };

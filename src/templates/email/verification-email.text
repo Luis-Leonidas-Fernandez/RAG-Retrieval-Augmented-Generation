@@ -1,0 +1,13 @@
+Hola {{name}},
+
+Gracias por registrarte en Vector RAG.
+
+Para completar tu registro, verifica tu dirección de email visitando el siguiente enlace:
+
+{{verificationUrl}}
+
+Este enlace expirará en 24 horas.
+
+Si no creaste esta cuenta, puedes ignorar este email.
+
+

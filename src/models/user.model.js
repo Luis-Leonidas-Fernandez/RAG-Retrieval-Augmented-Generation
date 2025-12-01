@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -43,6 +44,19 @@ const UserSchema = new mongoose.Schema(
     allowHistory: {
       type: Boolean,
       default: true,
+    },
+    // Campos de verificación de email
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationToken: {
+      type: String,
+      select: false, // No incluir en queries por defecto
+    },
+    verificationTokenExpires: {
+      type: Date,
+      select: false,
     },
   },
   {
@@ -92,7 +106,30 @@ UserSchema.methods.generateAuthToken = function () {
 UserSchema.methods.toJSON = function () {
   const userObject = this.toObject();
   delete userObject.password;
+  delete userObject.verificationToken;
+  delete userObject.verificationTokenExpires;
   return userObject;
+};
+
+// Método de instancia para generar token de verificación
+UserSchema.methods.generateVerificationToken = function () {
+  const token = crypto.randomBytes(32).toString("hex");
+  
+  this.verificationToken = token;
+  const expiryHours = parseInt(process.env.EMAIL_VERIFICATION_EXPIRY?.replace('h', '') || '24', 10);
+  this.verificationTokenExpires = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+  
+  return token;
+};
+
+// Método estático para verificar token de email
+UserSchema.statics.verifyEmailToken = async function (token) {
+  const user = await this.findOne({
+    verificationToken: token,
+    verificationTokenExpires: { $gt: new Date() },
+  }).select("+verificationToken +verificationTokenExpires");
+  
+  return user;
 };
 
 export const UserModel = mongoose.model("User", UserSchema);

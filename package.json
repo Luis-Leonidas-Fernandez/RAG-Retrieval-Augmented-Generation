@@ -34,6 +34,7 @@
     "openai": "^6.9.1",
     "pdf-parse": "^2.4.5",
     "piscina": "^4.0.0",
+    "resend": "^4.0.0",
     "uuid": "^13.0.0",
     "validator": "^13.13.0"
   },

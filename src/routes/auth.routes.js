@@ -4,6 +4,8 @@ import {
   login,
   getProfile,
   updateProfile,
+  verifyEmail,
+  resendVerification,
 } from "../controllers/auth.controller.js";
 import { authenticateToken } from "../middlewares/auth.middleware.js";
 import { authRateLimit } from "../middlewares/rate-limit.middleware.js";
@@ -76,6 +78,31 @@ router.get("/profile", authenticateToken, getProfile);
 
 // PUT /api/auth/profile - Actualizar perfil (requiere autenticación)
 router.put("/profile", authenticateToken, validateUpdateProfile, updateProfile);
+
+// Validación para verificar email
+const validateVerifyEmail = [
+  body("token")
+    .notEmpty()
+    .withMessage("Token de verificación requerido")
+    .trim(),
+  handleValidationErrors,
+];
+
+// Validación para reenviar verificación
+const validateResendVerification = [
+  body("email")
+    .isEmail()
+    .withMessage("Debe ser un email válido")
+    .normalizeEmail()
+    .trim(),
+  handleValidationErrors,
+];
+
+// POST /api/auth/verify-email - Verificar email (sin autenticación)
+router.post("/verify-email", authRateLimit, validateVerifyEmail, verifyEmail);
+
+// POST /api/auth/resend-verification - Reenviar email de verificación (sin autenticación)
+router.post("/resend-verification", authRateLimit, validateResendVerification, resendVerification);
 
 export default router;
 

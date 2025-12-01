@@ -191,13 +191,79 @@ export async function register(name, email, password) {
     const data = await response.json();
 
     if (response.ok && data.ok && data.data) {
-      setToken(data.data.token, data.data.user);
+      // Si requiere verificación, NO guardar token
+      if (data.data.requiresVerification === true) {
+        return { 
+          success: true, 
+          requiresVerification: true,
+          user: data.data.user 
+        };
+      }
+      
+      // Si no requiere verificación (compatibilidad con clientes viejos), guardar token
+      if (data.data.token) {
+        setToken(data.data.token, data.data.user);
+      }
       return { success: true, user: data.data.user };
     } else {
       return { success: false, error: data.message || 'Error al registrar usuario' };
     }
   } catch (error) {
     console.error('[AUTH.JS] Error en registro:', error);
+    return { success: false, error: 'Error de conexión. Por favor intenta nuevamente.' };
+  }
+}
+
+/**
+ * Verificar email del usuario
+ */
+export async function verifyEmail(token) {
+  try {
+    const response = await fetch('/api/auth/verify-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.ok && data.data) {
+      // Guardar token y usuario después de verificación exitosa
+      setToken(data.data.token, data.data.user);
+      return { success: true, user: data.data.user };
+    } else {
+      return { success: false, error: data.message || 'Error al verificar email' };
+    }
+  } catch (error) {
+    console.error('[AUTH.JS] Error en verificación:', error);
+    return { success: false, error: 'Error de conexión. Por favor intenta nuevamente.' };
+  }
+}
+
+/**
+ * Reenviar email de verificación
+ */
+export async function resendVerification(email) {
+  try {
+    const response = await fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.ok) {
+      return { success: true, message: data.message };
+    } else {
+      return { success: false, error: data.message || 'Error al reenviar email' };
+    }
+  } catch (error) {
+    console.error('[AUTH.JS] Error al reenviar verificación:', error);
     return { success: false, error: 'Error de conexión. Por favor intenta nuevamente.' };
   }
 }

@@ -451,11 +451,50 @@
   </div>
 
   <script type="module">
-    import { login, register, isAuthenticated } from '/js/auth.js';
+    import { login, register, isAuthenticated, verifyEmail, resendVerification } from '/js/auth.js';
 
     // Si ya está autenticado, redirigir
     if (isAuthenticated()) {
       window.location.href = '/pdfs.html';
+    }
+
+    // Detectar token en URL y verificar email automáticamente
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      // Mostrar mensaje de verificación en progreso
+      const successDiv = document.getElementById('registerSuccess');
+      if (successDiv) {
+        successDiv.textContent = 'Verificando email...';
+        successDiv.classList.add('show');
+      }
+
+      // Verificar email
+      verifyEmail(token).then((result) => {
+        if (result.success) {
+          if (successDiv) {
+            successDiv.textContent = '¡Email verificado correctamente! Redirigiendo...';
+            successDiv.classList.add('show');
+          }
+          // Limpiar URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          // Redirigir después de un momento
+          setTimeout(() => {
+            window.location.href = '/pdfs.html';
+          }, 1500);
+        } else {
+          const errorDiv = document.getElementById('registerError');
+          if (errorDiv) {
+            errorDiv.textContent = result.error || 'Error al verificar email';
+            errorDiv.classList.add('show');
+          }
+          if (successDiv) {
+            successDiv.classList.remove('show');
+          }
+          // Limpiar URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      });
     }
 
     // Partículas de fondo
@@ -713,14 +752,23 @@
         const result = await register(name, email, password);
 
         if (result.success) {
-          // Mostrar mensaje de éxito
-          document.getElementById('registerSuccess').textContent = '¡Registro exitoso! Redirigiendo...';
-          document.getElementById('registerSuccess').classList.add('show');
-          
-          // Redirigir después de un momento
-          setTimeout(() => {
-            window.location.href = '/pdfs.html';
-          }, 1000);
+          // Si requiere verificación, mostrar mensaje y NO redirigir
+          if (result.requiresVerification === true) {
+            document.getElementById('registerSuccess').textContent = 'Revisa tu correo para verificar tu email';
+            document.getElementById('registerSuccess').classList.add('show');
+            btn.disabled = false;
+            btn.classList.remove('loading');
+            // No redirigir, el usuario debe verificar primero
+          } else {
+            // Si no requiere verificación (compatibilidad con clientes viejos), redirigir
+            document.getElementById('registerSuccess').textContent = '¡Registro exitoso! Redirigiendo...';
+            document.getElementById('registerSuccess').classList.add('show');
+            
+            // Redirigir después de un momento
+            setTimeout(() => {
+              window.location.href = '/pdfs.html';
+            }, 1000);
+          }
         } else {
           errorDiv.textContent = result.error || 'Error al registrar usuario';
           errorDiv.classList.add('show');
