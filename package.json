@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "nodemon --exec 'node --max-old-space-size=2048 --expose-gc' src/server.js",
     "start": "node --max-old-space-size=2048 --expose-gc src/server.js",
-    "create-admin": "node src/scripts/create-admin.js"
+    "create-admin": "node src/scripts/create-admin.js",
+    "docker:up": "docker start qdrant-rag redis-rag 2>/dev/null || (docker run -d --name qdrant-rag -p 6333:6333 -v \"$(pwd)/qdrant_data:/qdrant/storage\" qdrant/qdrant && docker run -d --name redis-rag -p 6379:6379 redis:7-alpine)",
+    "docker:down": "docker stop qdrant-rag redis-rag"
   },
   "engines": {
     "node": ">=18.0.0"

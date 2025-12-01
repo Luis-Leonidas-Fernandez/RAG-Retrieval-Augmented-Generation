@@ -1,23 +1,50 @@
 import { UserModel } from "../models/user.model.js";
+import { TenantModel } from "../models/tenant.model.js";
 import { createResponse } from "../utils/response.js";
+import { createActiveSession } from "../services/session.service.js";
 
 /**
  * Registrar nuevo usuario
  */
 export const register = async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, tenantSlug } = req.body;
     
-    // Verificar si el usuario ya existe (solo verificar existencia, no cargar datos completos)
-    const existingUser = await UserModel.exists({ email: email.toLowerCase() });
+    // Obtener tenant (por slug o usar default)
+    let tenant;
+    if (tenantSlug) {
+      tenant = await TenantModel.findOne({ slug: tenantSlug.toLowerCase() });
+      if (!tenant) {
+        return res.status(400).json(
+          createResponse(false, "Tenant no encontrado")
+        );
+      }
+    } else {
+      // Buscar tenant default o crear uno si no existe
+      tenant = await TenantModel.findOne({ slug: "default" });
+      if (!tenant) {
+        // Crear tenant default si no existe
+        tenant = await TenantModel.create({
+          name: "Default Tenant",
+          slug: "default",
+        });
+      }
+    }
+
+    // Verificar si el usuario ya existe en este tenant
+    const existingUser = await UserModel.exists({
+      tenantId: tenant._id,
+      email: email.toLowerCase(),
+    });
     if (existingUser) {
       return res.status(400).json(
-        createResponse(false, "El email ya está registrado")
+        createResponse(false, "El email ya está registrado en este tenant")
       );
     }
 
-    // Crear nuevo usuario
+    // Crear nuevo usuario con tenantId
     const user = await UserModel.create({
+      tenantId: tenant._id,
       email: email.toLowerCase(),
       password,
       name,
@@ -25,6 +52,11 @@ export const register = async (req, res) => {
 
     // Generar token JWT
     const token = user.generateAuthToken();
+
+    // Crear sesión activa en Redis (async, no bloquea)
+    createActiveSession(user.tenantId.toString(), user._id.toString(), token, req).catch((err) => {
+      console.error("[AUTH] Error al crear sesión activa:", err);
+    });
 
     // Respuesta sin password
     const userResponse = user.toJSON();
@@ -79,7 +111,9 @@ export const login = async (req, res) => {
     }
 
     // Buscar usuario y incluir password (select: false por defecto)
-    const user = await UserModel.findOne({ email: email.toLowerCase() }).select("+password");
+    // Nota: En un sistema multi-tenant real, el email debería ser único por tenant
+    // Por ahora buscamos por email (asumiendo que el tenant viene del contexto o es único)
+    const user = await UserModel.findOne({ email: email.toLowerCase() }).select("+password tenantId");
 
     if (!user) {
       return res.status(401).json(
@@ -98,6 +132,14 @@ export const login = async (req, res) => {
     // Generar token JWT
     const token = user.generateAuthToken();
 
+    // Crear sesión activa en Redis
+    const session = await createActiveSession(
+      user.tenantId.toString(),
+      user._id.toString(),
+      token,
+      req
+    );
+
     // Respuesta sin password
     const userResponse = user.toJSON();
 
@@ -105,6 +147,7 @@ export const login = async (req, res) => {
       createResponse(true, "Inicio de sesión exitoso", {
         token,
         user: userResponse,
+        sessionId: session?.tokenId, // ID de sesión para referencia
       })
     );
   } catch (error) {

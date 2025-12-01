@@ -139,6 +139,27 @@ Si usas otra URL distinta, actualiza `REDIS_URL` en tu `.env`.
 
 **Nota**: Redis es opcional pero recomendado para mejorar el rendimiento mediante caché de embeddings y respuestas RAG. Si no levantas Redis, la aplicación funcionará en modo degradado (sin caché).
 
+### 5.5. Comandos rápidos para Docker (Qdrant y Redis)
+
+**Levantar Qdrant y Redis con una sola línea:**
+```bash
+npm run docker:up
+```
+
+Este comando:
+- Inicia los contenedores si ya existen
+- O los crea si no existen
+
+**Detener Qdrant y Redis con una sola línea:**
+```bash
+npm run docker:down
+```
+
+**Verificar estado de los contenedores:**
+```bash
+docker ps | grep -E "qdrant|redis"
+```
+
 ### 6. Levantar el backend Node.js
 
 #### En modo desarrollo (con recarga automática)

@@ -820,13 +820,13 @@
           return;
         }
 
-        if (!data.pdfs.length) {
+        if (!data.data?.pdfs?.length) {
           tbody.innerHTML = "<tr><td colspan='5'>No hay PDFs subidos aún.</td></tr>";
           return;
         }
 
         tbody.innerHTML = "";
-        data.pdfs.forEach((pdf) => {
+        data.data.pdfs.forEach((pdf) => {
           const tr = document.createElement("tr");
 
           const sizeKb = (pdf.size / 1024).toFixed(1);

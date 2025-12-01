@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ragQuery } from "../controllers/rag.controller.js";
-import { ragUserRateLimit } from "../middlewares/user-rate-limit.middleware.js";
+import { ragUserRateLimit, ragTenantRateLimit } from "../middlewares/user-rate-limit.middleware.js";
 import { authenticateToken } from "../middlewares/auth.middleware.js";
 import { validateString, validateObjectIdBody, handleValidationErrors } from "../middlewares/validation.middleware.js";
 
@@ -17,9 +17,15 @@ const validateRagQuery = [
   handleValidationErrors,
 ];
 
-// Rate limiting por usuario (ruta protegida siempre requiere autenticación)
-// Ya no usamos combinedRateLimit porque esta ruta requiere authenticateToken
+// Rate limiting: primero por tenant, luego por usuario
+// Orden: IP (global) → Tenant → User
 
-router.post("/query", authenticateToken, ragUserRateLimit, validateRagQuery, ragQuery);
+router.post("/query", 
+  authenticateToken, 
+  ragTenantRateLimit,  // Primero: límite por tenant
+  ragUserRateLimit,    // Segundo: límite por usuario
+  validateRagQuery, 
+  ragQuery
+);
 
 export default router;

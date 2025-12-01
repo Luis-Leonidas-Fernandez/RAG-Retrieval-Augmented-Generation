@@ -1,74 +1,158 @@
 import rateLimit from "express-rate-limit";
 
 /**
- * Rate limiting que combina IP y usuario
- * Si el usuario está autenticado, usa su ID como key
- * Si no, usa la IP
+ * Función helper para logging mejorado de rate limits excedidos
+ * Incluye tenantId, userId, ruta para analytics
  */
-const createUserRateLimit = (max, message, windowMs) => {
+const logRateLimitExceeded = (req, limitType, limitValue) => {
+  const tenantId = req.user?.tenantId || 'unknown';
+  const userId = req.user?.id || 'unknown';
+  const route = req.path || req.route?.path || 'unknown';
+  const method = req.method || 'unknown';
+  
+  const logData = {
+    tenantId,
+    userId: limitType === 'user' ? userId : undefined, // Solo en límites por user
+    route: `${method} ${route}`,
+    limitType, // 'user' o 'tenant'
+    limit: limitValue,
+    ip: req.ip || req.connection.remoteAddress,
+    userAgent: req.get('user-agent'),
+    timestamp: new Date().toISOString(),
+  };
+  
+  // Usar console.warn con estructura clara para analytics
+  console.warn(`[RateLimit] ${limitType} excedido`, logData);
+};
+
+/**
+ * Rate limiting por usuario autenticado
+ * Configurable por env vars con tenantId en keyGenerator
+ */
+const createUserRateLimit = (envVar, defaultMax, message, windowMs) => {
+  const maxFromEnv = parseInt(process.env[envVar] || defaultMax.toString(), 10);
+  
   return rateLimit({
     windowMs: windowMs || parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
-    max,
+    max: maxFromEnv,
     message: {
       ok: false,
       message,
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // Key generator: siempre usa user.id porque estas rutas requieren authenticateToken
+    // Key generator: incluir tenantId para namespacing consistente
     keyGenerator: (req) => {
-      // Todas las rutas que usan estos rate limits requieren autenticación
-      // por lo que req.user siempre existirá
-      if (req.user && req.user.id) {
-        return `user:${req.user.id}`;
+      if (req.user && req.user.id && req.user.tenantId) {
+        return `tenant:${req.user.tenantId}:user:${req.user.id}`;
       }
-      // Fallback de seguridad (no debería ejecutarse nunca)
-      return `user:unknown`;
+      return `tenant:unknown:user:unknown`;
     },
     // Skip si el usuario es admin (opcional)
     skip: (req) => {
       return req.user && req.user.role === "admin";
     },
+    // Logging cuando se alcanza el límite
+    onLimitReached: (req, res, options) => {
+      logRateLimitExceeded(req, 'user', options.max);
+    },
   });
 };
 
 /**
- * Rate limit para usuarios autenticados - RAG queries
- * Límites más generosos para usuarios autenticados
+ * Rate limiting por tenant
+ * Configurable por env vars y tenantSettings (planes Enterprise vs Pyme)
+ */
+const createTenantRateLimit = (envVar, defaultMax, message, windowMs, getMaxFromSettings = null) => {
+  const maxFromEnv = parseInt(process.env[envVar] || defaultMax.toString(), 10);
+  
+  return rateLimit({
+    windowMs: windowMs || parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
+    max: (req) => {
+      // Si hay función para obtener max desde settings, usarla
+      if (getMaxFromSettings && req.user?.tenantSettings) {
+        const customMax = getMaxFromSettings(req.user.tenantSettings);
+        return customMax || maxFromEnv;
+      }
+      return maxFromEnv;
+    },
+    message: {
+      ok: false,
+      message,
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => {
+      if (req.user && req.user.tenantId) {
+        return `tenant:${req.user.tenantId}`;
+      }
+      return `tenant:unknown`;
+    },
+    skip: (req) => {
+      return req.user && req.user.role === "admin";
+    },
+    // Logging cuando se alcanza el límite
+    onLimitReached: (req, res, options) => {
+      const limitValue = typeof options.max === 'function' 
+        ? options.max(req) 
+        : options.max;
+      logRateLimitExceeded(req, 'tenant', limitValue);
+    },
+  });
+};
+
+/**
+ * Rate limits por usuario (configurables por env)
+ * Mensajes en segunda persona: "Has alcanzado el límite de X por minuto"
  */
 export const ragUserRateLimit = createUserRateLimit(
-  100, // 100 requests por minuto para usuarios autenticados (vs 60 por IP)
-  "Demasiadas consultas RAG. Por favor espera antes de hacer más consultas.",
+  'RATE_LIMIT_RAG_USER_DEFAULT',
+  100,
+  "Has alcanzado el límite de consultas RAG por minuto. Por favor espera antes de hacer más consultas.",
 );
 
-/**
- * Rate limit para usuarios autenticados - Uploads
- */
 export const uploadUserRateLimit = createUserRateLimit(
-  20, // 20 uploads por minuto para usuarios autenticados (vs 10 por IP)
-  "Demasiados archivos subidos. Por favor espera antes de subir más archivos.",
+  'RATE_LIMIT_UPLOAD_USER_DEFAULT',
+  20,
+  "Has alcanzado el límite de uploads por minuto. Por favor espera antes de subir más archivos.",
 );
 
-/**
- * Rate limit para usuarios autenticados - Procesamiento
- */
 export const processUserRateLimit = createUserRateLimit(
-  40, // 40 requests por minuto para usuarios autenticados (vs 20 por IP)
-  "Demasiadas solicitudes de procesamiento. Por favor espera.",
+  'RATE_LIMIT_PROCESS_USER_DEFAULT',
+  40,
+  "Has alcanzado el límite de solicitudes de procesamiento por minuto. Por favor espera.",
 );
 
-/**
- * Rate limit general para usuarios autenticados
- */
 export const generalUserRateLimit = createUserRateLimit(
-  200, // 200 requests por minuto para usuarios autenticados (vs 100 por IP)
-  "Demasiadas solicitudes. Por favor intenta más tarde.",
+  'RATE_LIMIT_GENERAL_USER_DEFAULT',
+  200,
+  "Has alcanzado el límite de solicitudes por minuto. Por favor intenta más tarde.",
 );
 
 /**
- * NOTA: combinedRateLimit ya no se usa.
- * Las rutas protegidas siempre requieren autenticación (authenticateToken),
- * por lo que siempre usaremos rate limits por usuario directamente.
- * Esto simplifica el código y elimina la doble aplicación de rate limits.
+ * Rate limits por tenant (configurables por env y tenantSettings)
+ * Mensajes en tercera persona organizacional: "Tu organización alcanzó el límite de X por minuto"
  */
+export const ragTenantRateLimit = createTenantRateLimit(
+  'RATE_LIMIT_RAG_TENANT_DEFAULT',
+  500,
+  "Tu organización alcanzó el límite de consultas RAG por minuto. Por favor contacta al administrador.",
+  null,
+  (tenantSettings) => tenantSettings?.rateLimits?.ragPerMinute || null
+);
 
+export const uploadTenantRateLimit = createTenantRateLimit(
+  'RATE_LIMIT_UPLOAD_TENANT_DEFAULT',
+  100,
+  "Tu organización alcanzó el límite de uploads por minuto. Por favor contacta al administrador.",
+  null,
+  (tenantSettings) => tenantSettings?.rateLimits?.uploadPerMinute || null
+);
+
+export const processTenantRateLimit = createTenantRateLimit(
+  'RATE_LIMIT_PROCESS_TENANT_DEFAULT',
+  200,
+  "Tu organización alcanzó el límite de solicitudes de procesamiento por minuto. Por favor contacta al administrador.",
+  null,
+  (tenantSettings) => tenantSettings?.rateLimits?.processPerMinute || null
+);

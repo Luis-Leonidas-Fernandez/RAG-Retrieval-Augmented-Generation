@@ -21,10 +21,13 @@ const pdfPool = new Piscina({
 // Nota: getPageForChunk() fue eliminada - ahora la página se calcula directamente en el worker
 
 export const processPdfById = async (pdfId) => {
-  // Verificar que el PDF exista y obtener solo el campo necesario (path)
+  // Verificar que el PDF exista y obtener path y tenantId
   // No usar .lean() porque necesitamos actualizar el status después
-  const pdfDoc = await PdfModel.findById(pdfId).select('path status');
+  const pdfDoc = await PdfModel.findById(pdfId).select('path status tenantId');
   if (!pdfDoc) throw new Error("PDF no encontrado");
+  if (!pdfDoc.tenantId) throw new Error("PDF no tiene tenantId asignado");
+  
+  const tenantId = pdfDoc.tenantId;
 
   let allChunks = null;
   let result = null;
@@ -46,7 +49,7 @@ export const processPdfById = async (pdfId) => {
     result.chunks = null;
 
     // --- EVITAR DUPLICADOS ---
-    await ChunkModel.deleteMany({ pdfId });
+    await ChunkModel.deleteMany({ tenantId, pdfId });
 
     // Guardar chunks en MongoDB con información de página (en lotes para optimizar memoria)
     const BATCH_SIZE = parseInt(process.env.PDF_BATCH_SIZE || '100', 10);
@@ -59,6 +62,7 @@ export const processPdfById = async (pdfId) => {
       
       const chunkDocs = await ChunkModel.insertMany(
         batch.map((chunk, idx) => ({
+          tenantId, // CRÍTICO: incluir tenantId
           pdfId,
           index: totalInserted + idx,
           content: chunk.text,
@@ -81,11 +85,11 @@ export const processPdfById = async (pdfId) => {
     await pdfDoc.save();
 
     // Invalidar caché RAG para este PDF (los chunks han cambiado)
-    await invalidateRagCacheForPdf(pdfId);
+    await invalidateRagCacheForPdf(tenantId.toString(), pdfId);
     console.log(`[PDF Process] Caché RAG invalidada para PDF ${pdfId}`);
 
-    // Indexar estos chunks en Qdrant (embeddings + upsert)
-    const { inserted } = await indexPdfChunksInQdrant(pdfId);
+    // Indexar estos chunks en Qdrant (embeddings + upsert) con tenantId
+    const { inserted } = await indexPdfChunksInQdrant(tenantId.toString(), pdfId);
 
     // Retornar solo datos necesarios (no el objeto Mongoose completo)
     return {

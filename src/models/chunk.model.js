@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const ChunkSchema = new mongoose.Schema(
   {
+    tenantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tenant",
+      required: true,
+      index: true,
+    },
     pdfId: { type: mongoose.Schema.Types.ObjectId, ref: "Pdf", required: true },
     index: Number,
     content: String,
@@ -14,5 +20,9 @@ const ChunkSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Índices compuestos empezando por tenantId
+ChunkSchema.index({ tenantId: 1, pdfId: 1, status: 1 });
+ChunkSchema.index({ tenantId: 1, pdfId: 1, index: 1 });
 
 export const ChunkModel = mongoose.model("Chunk", ChunkSchema);

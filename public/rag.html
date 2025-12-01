@@ -634,7 +634,7 @@
           throw new Error(data.message || "Error al obtener la lista de PDFs.");
         }
 
-        pdfList = Array.isArray(data.pdfs) ? data.pdfs : [];
+        pdfList = Array.isArray(data.data?.pdfs) ? data.data.pdfs : [];
 
         if (!pdfList.length) {
           statusEl.textContent = "No hay PDFs subidos aún.";
@@ -893,7 +893,7 @@
         statusEl.textContent = "Respuesta recibida.";
         
         // Procesar la respuesta para convertir Markdown básico a HTML
-        const formattedAnswer = formatMarkdownToHtml(data.answer || "(sin respuesta)");
+        const formattedAnswer = formatMarkdownToHtml(data.data?.answer || "(sin respuesta)");
         
         // Mostrar la respuesta con efecto suave
         answerEl.innerHTML = formattedAnswer;

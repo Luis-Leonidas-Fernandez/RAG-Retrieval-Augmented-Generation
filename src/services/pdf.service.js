@@ -32,12 +32,14 @@ export const deletePdfFile = async (filePath) => {
   }
 };
 
-export const saveUploadedPdf = async (file) => {
+export const saveUploadedPdf = async (tenantId, userId, file) => {
   if (!file) {
     throw new Error("No se recibió archivo");
   }
 
   const doc = await PdfModel.create({
+    tenantId, // CRÍTICO: incluir tenantId
+    userId, // CRÍTICO: incluir userId
     originalName: file.originalname,
     fileName: file.filename,
     path: file.path,
@@ -48,12 +50,23 @@ export const saveUploadedPdf = async (file) => {
   return doc;
 };
 
-export const getAllPdfs = async (options = {}) => {
+export const getAllPdfs = async (tenantId, userId = null, options = {}) => {
   const { limit = 50, skip = 0 } = options;
+  
+  // Query base con tenantId
+  const query = {
+    tenantId, // CRÍTICO: filtrar por tenant
+    isDeleted: false, // No incluir borrados
+  };
+
+  // Si se proporciona userId, filtrar por usuario también
+  if (userId) {
+    query.userId = userId;
+  }
   
   // Usar .lean() para retornar objetos JavaScript planos (menos memoria)
   // Solo seleccionar campos necesarios para reducir memoria
-  const docs = await PdfModel.find()
+  const docs = await PdfModel.find(query)
     .select('originalName fileName path size mimetype status createdAt')
     .sort({ createdAt: -1 })
     .limit(limit)

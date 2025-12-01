@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import { UserModel } from "../models/user.model.js";
+import { TenantModel } from "../models/tenant.model.js";
 import { createResponse } from "../utils/response.js";
+import { isSessionActive, updateSessionActivity, hashToken } from "../services/session.service.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -46,24 +48,62 @@ export const authenticateToken = async (req, res, next) => {
       throw error;
     }
 
-    // 3. Buscar usuario en la base de datos (solo campos necesarios)
-    // Usar .lean() para retornar objeto JavaScript plano (menos memoria)
-    const user = await UserModel.findById(decoded.id)
-      .select("_id email name role")
+    // 3. Validar que JWT tenga tenantId
+    if (!decoded.tenantId) {
+      return res.status(401).json(
+        createResponse(false, "Token inválido: falta tenantId")
+      );
+    }
+
+    // 4. Buscar usuario en la base de datos (validando tenantId)
+    const user = await UserModel.findOne({
+      _id: decoded.id,
+      tenantId: decoded.tenantId, // CRÍTICO: validar tenant
+    })
+      .select("_id email name role tenantId")
       .lean();
     
     if (!user) {
       return res.status(401).json(
-        createResponse(false, "Usuario no encontrado")
+        createResponse(false, "Usuario no encontrado o no pertenece al tenant")
       );
     }
 
-    // 4. Agregar usuario a la request
+    // 5. Cargar tenant y settings
+    const tenant = await TenantModel.findById(decoded.tenantId).lean();
+    if (!tenant) {
+      return res.status(401).json(
+        createResponse(false, "Tenant inválido")
+      );
+    }
+
+    // 6. Verificar sesión activa en Redis (si está disponible)
+    const tokenId = hashToken(token);
+    const sessionActive = await isSessionActive(user.tenantId.toString(), tokenId);
+
+    if (sessionActive === false) {
+      // Sesión no está activa (pero Redis está disponible)
+      return res.status(401).json(
+        createResponse(false, "Sesión expirada o cerrada. Por favor inicia sesión nuevamente")
+      );
+    }
+
+    // 7. Actualizar actividad de sesión (no bloqueante)
+    if (sessionActive !== null) {
+      // Redis está disponible y sesión existe
+      updateSessionActivity(user.tenantId.toString(), tokenId).catch((err) => {
+        console.warn("[AUTH] Error al actualizar actividad de sesión:", err);
+      });
+    }
+
+    // 8. Agregar usuario y tenant a la request
     req.user = {
       id: user._id.toString(),
+      tenantId: user.tenantId.toString(), // CRÍTICO: incluir tenantId
       email: user.email,
       name: user.name,
       role: user.role,
+      tenantSettings: tenant.settings, // Settings del tenant
     };
 
     next();

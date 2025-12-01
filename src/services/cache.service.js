@@ -156,46 +156,46 @@ export const deleteCachePattern = async (pattern) => {
 };
 
 /**
- * Obtener embedding del caché
+ * Obtener embedding del caché (multi-tenant)
  */
-export const getCachedEmbedding = async (question) => {
+export const getCachedEmbedding = async (tenantId, question) => {
   const questionHash = generateHash(question);
-  const key = generateCacheKey("embedding", questionHash);
+  const key = generateCacheKey("embedding", tenantId, questionHash);
   return await getCache(key);
 };
 
 /**
- * Guardar embedding en caché
+ * Guardar embedding en caché (multi-tenant)
  */
-export const setCachedEmbedding = async (question, embedding) => {
+export const setCachedEmbedding = async (tenantId, question, embedding) => {
   const questionHash = generateHash(question);
-  const key = generateCacheKey("embedding", questionHash);
+  const key = generateCacheKey("embedding", tenantId, questionHash);
   return await setCache(key, embedding, DEFAULT_TTL_EMBEDDING);
 };
 
 /**
- * Obtener respuesta RAG completa del caché
+ * Obtener respuesta RAG completa del caché (multi-tenant)
  */
-export const getCachedRagResponse = async (pdfId, question) => {
+export const getCachedRagResponse = async (tenantId, pdfId, question) => {
   const questionHash = generateHash(question);
-  const key = generateCacheKey("rag", pdfId, questionHash);
+  const key = generateCacheKey("rag", tenantId, pdfId, questionHash);
   return await getCache(key);
 };
 
 /**
- * Guardar respuesta RAG completa en caché
+ * Guardar respuesta RAG completa en caché (multi-tenant)
  */
-export const setCachedRagResponse = async (pdfId, question, response) => {
+export const setCachedRagResponse = async (tenantId, pdfId, question, response) => {
   const questionHash = generateHash(question);
-  const key = generateCacheKey("rag", pdfId, questionHash);
+  const key = generateCacheKey("rag", tenantId, pdfId, questionHash);
   return await setCache(key, response, DEFAULT_TTL_RAG_RESPONSE);
 };
 
 /**
- * Invalidar todas las respuestas RAG de un PDF
+ * Invalidar todas las respuestas RAG de un PDF (multi-tenant)
  */
-export const invalidateRagCacheForPdf = async (pdfId) => {
-  const pattern = generateCacheKey("rag", pdfId, "*");
+export const invalidateRagCacheForPdf = async (tenantId, pdfId) => {
+  const pattern = generateCacheKey("rag", tenantId, pdfId, "*");
   return await deleteCachePattern(pattern);
 };
 

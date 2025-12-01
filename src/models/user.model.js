@@ -7,10 +7,15 @@ dotenv.config();
 
 const UserSchema = new mongoose.Schema(
   {
+    tenantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tenant",
+      required: true,
+      index: true,
+    },
     email: {
       type: String,
       required: [true, "El email es requerido"],
-      unique: true,
       lowercase: true,
       trim: true,
       match: [
@@ -35,11 +40,18 @@ const UserSchema = new mongoose.Schema(
       enum: ["user", "admin"],
       default: "user",
     },
+    allowHistory: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+// Índice único compuesto: email único por tenant
+UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 
 // Hash password antes de guardar
 UserSchema.pre("save", async function (next) {
@@ -63,6 +75,7 @@ UserSchema.methods.generateAuthToken = function () {
     id: this._id,
     email: this.email,
     role: this.role,
+    tenantId: this.tenantId.toString(),
   };
 
   const secret = process.env.JWT_SECRET;

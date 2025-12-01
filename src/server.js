@@ -8,9 +8,12 @@ import { initRedis, closeRedis } from "./config/redis.js";
 import { closePdfPool, getPdfPool } from "./services/pdf-process.service.js";
 import { startMetricsCollection, stopMetricsCollection } from "./services/metrics-collector.service.js";
 import { setPdfPoolGetter } from "./services/metrics.service.js";
+import { cleanupExpiredUserSessions } from "./services/session.service.js";
+import { TenantModel } from "./models/tenant.model.js";
 
 let server = null;
 let isShuttingDown = false;
+let sessionCleanupInterval = null;
 
 // Middleware para rechazar nuevas requests durante shutdown
 app.use((req, res, next) => {
@@ -46,6 +49,13 @@ const gracefulShutdown = async (signal) => {
   }, 30000); // 30 segundos máximo
 
   try {
+    // 2.5. Detener limpieza de sesiones
+    if (sessionCleanupInterval) {
+      clearInterval(sessionCleanupInterval);
+      sessionCleanupInterval = null;
+      console.log("[Shutdown] Limpieza de sesiones detenida");
+    }
+
     // 3. Cerrar Redis
     await closeRedis();
 
@@ -107,6 +117,29 @@ try {
 
   // 7) Iniciar recolección periódica de métricas
   startMetricsCollection();
+
+  // 8) Iniciar limpieza periódica de sesiones expiradas
+  const SESSION_CLEANUP_INTERVAL_MINUTES = parseInt(
+    process.env.SESSION_CLEANUP_INTERVAL_MINUTES || "15",
+    10
+  );
+  const cleanupIntervalMs = SESSION_CLEANUP_INTERVAL_MINUTES * 60 * 1000;
+
+  sessionCleanupInterval = setInterval(async () => {
+    try {
+      // Obtener todos los tenants activos
+      const tenants = await TenantModel.find({}).select("_id").lean();
+      for (const tenant of tenants) {
+        await cleanupExpiredUserSessions(tenant._id.toString());
+      }
+    } catch (error) {
+      console.error("[Server] Error en limpieza de sesiones:", error);
+    }
+  }, cleanupIntervalMs);
+
+  console.log(
+    `[Server] Limpieza de sesiones iniciada con intervalo de ${SESSION_CLEANUP_INTERVAL_MINUTES} minutos`
+  );
 } catch (error) {
   console.error("[Server] Error al inicializar servicios:", error);
   process.exit(1);
