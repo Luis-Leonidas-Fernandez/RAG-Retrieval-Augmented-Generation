@@ -512,8 +512,8 @@
       <div id="upload-area">
         <p>Arrastra aquí un PDF o haz clic para buscarlo en tu ordenador.</p>
         <div class="upload-actions">
-          <input id="pdf-input" type="file" accept="application/pdf" style="display: none" />
-          <button id="select-pdf-button" type="button">Seleccionar PDF</button>
+          <input id="pdf-input" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp" style="display: none" />
+          <button id="select-pdf-button" type="button">Seleccionar Documento</button>
           <button
             id="upload-button"
             type="button"
@@ -521,7 +521,7 @@
             style="opacity: 0.5; cursor: not-allowed;"
           >
             <span class="progress-bg" id="upload-button-progress"></span>
-            <span class="label" id="upload-button-label">Subir PDF</span>
+            <span class="label" id="upload-button-label">Subir Documento</span>
           </button>
         </div>
         <p id="upload-status"></p>
@@ -595,7 +595,7 @@
       uploadButtonLabel.textContent = "Subiendo...";
 
       const formData = new FormData();
-      formData.append("pdf", file); // nombre de campo esperado por el backend
+      formData.append("doc", file); // nombre de campo esperado por el backend
 
       try {
         const xhr = new XMLHttpRequest();
@@ -630,7 +630,7 @@
               }
 
               uploadButtonProgress.style.width = "100%";
-              statusEl.innerHTML = `PDF subido correctamente <span class="success-pulse">✓</span>`;
+              statusEl.innerHTML = `Documento subido correctamente <span class="success-pulse">✓</span>`;
               uploadButtonLabel.textContent = "Subido";
 
               // limpiar selección
@@ -641,7 +641,7 @@
               // Reset visual después de un momento
               setTimeout(() => {
                 uploadButtonProgress.style.width = "0%";
-                uploadButtonLabel.textContent = "Subir PDF";
+                uploadButtonLabel.textContent = "Subir Documento";
                 uploadButton.disabled = true;
                 uploadButton.style.opacity = "0.5";
                 uploadButton.style.cursor = "not-allowed";
@@ -653,9 +653,9 @@
         };
 
         xhr.onerror = () => {
-          statusEl.textContent = "Error al subir el PDF (problema de red).";
+          statusEl.textContent = "Error al subir el documento (problema de red).";
           uploadButtonProgress.style.width = "0%";
-          uploadButtonLabel.textContent = "Subir PDF";
+          uploadButtonLabel.textContent = "Subir Documento";
           uploadButton.disabled = false;
           uploadButton.style.opacity = "1";
           uploadButton.style.cursor = "pointer";
@@ -664,9 +664,9 @@
         xhr.send(formData);
       } catch (err) {
         console.error(err);
-        statusEl.textContent = "Error al subir el PDF: " + err.message;
+        statusEl.textContent = "Error al subir el documento: " + err.message;
         uploadButtonProgress.style.width = "0%";
-        uploadButtonLabel.textContent = "Subir PDF";
+        uploadButtonLabel.textContent = "Subir Documento";
         uploadButton.disabled = false;
         uploadButton.style.opacity = "1";
         uploadButton.style.cursor = "pointer";
@@ -735,7 +735,7 @@
         }
       }
 
-      // Click en "Seleccionar PDF" - abre el diálogo de selección de archivos
+      // Click en "Seleccionar Documento" - abre el diálogo de selección de archivos
       selectPdfButton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -754,10 +754,10 @@
         }
       });
 
-      // Click en "Subir PDF"
+      // Click en "Subir Documento"
       uploadButton.addEventListener("click", () => {
         if (!selectedPdfFile) {
-          statusEl.textContent = "Primero selecciona un archivo PDF.";
+          statusEl.textContent = "Primero selecciona un archivo.";
           return;
         }
         uploadPdfFile(selectedPdfFile);
@@ -767,8 +767,28 @@
       fileInput.addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (file) {
-          if (file.type !== "application/pdf") {
-            statusEl.textContent = "Solo se permiten archivos PDF.";
+          const allowedTypes = [
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "text/plain",
+            "text/markdown",
+            "text/x-markdown",
+            "image/png",
+            "image/jpeg",
+            "image/jpg",
+            "image/gif",
+            "image/bmp",
+            "image/tiff",
+            "image/webp",
+          ];
+          
+          if (!allowedTypes.includes(file.type)) {
+            statusEl.textContent = "Tipo de archivo no permitido. Formatos soportados: PDF, DOC, DOCX, XLS, XLSX, TXT, MD, imágenes.";
             setSelectedFile(null);
             return;
           }
@@ -798,8 +818,28 @@
         const files = dt.files;
         if (files && files[0]) {
           const file = files[0];
-          if (file.type !== "application/pdf") {
-            statusEl.textContent = "Solo se permiten archivos PDF.";
+          const allowedTypes = [
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "text/plain",
+            "text/markdown",
+            "text/x-markdown",
+            "image/png",
+            "image/jpeg",
+            "image/jpg",
+            "image/gif",
+            "image/bmp",
+            "image/tiff",
+            "image/webp",
+          ];
+          
+          if (!allowedTypes.includes(file.type)) {
+            statusEl.textContent = "Tipo de archivo no permitido. Formatos soportados: PDF, DOC, DOCX, XLS, XLSX, TXT, MD, imágenes.";
             setSelectedFile(null);
             return;
           }

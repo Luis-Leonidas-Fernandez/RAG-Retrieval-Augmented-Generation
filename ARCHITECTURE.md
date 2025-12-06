@@ -2,6 +2,175 @@
 
 Este documento describe la arquitectura completa del sistema, incluyendo todos los pipelines de procesamiento, conexiones a bases de datos, validaciones y modelos LLM utilizados.
 
+## Arquitectura de Capas (Clean Architecture / Hexagonal Architecture)
+
+El sistema está organizado siguiendo los principios de **Clean Architecture** (Arquitectura Hexagonal), separando las responsabilidades en capas independientes que permiten mantener el código mantenible, testeable y desacoplado.
+
+### Estructura de Directorios
+
+```
+src/
+├── domain/                    # Capa de Dominio (Núcleo)
+│   ├── entities/             # Entidades de negocio
+│   ├── repositories/         # Interfaces de repositorios
+│   ├── services/             # Servicios de dominio (interfaces e implementaciones)
+│   ├── exceptions/           # Excepciones de dominio
+│   └── utils/                # Utilidades de dominio
+│
+├── application/              # Capa de Aplicación
+│   ├── use-cases/           # Casos de uso organizados por dominio
+│   │   ├── auth/
+│   │   ├── pdf/
+│   │   ├── rag/
+│   │   ├── conversation/
+│   │   ├── metrics/
+│   │   ├── session/
+│   │   ├── privacy/
+│   │   └── admin/
+│   ├── dtos/                # Data Transfer Objects
+│   └── utils/               # Utilidades de aplicación
+│
+├── infrastructure/          # Capa de Infraestructura
+│   ├── config/              # Configuraciones (DB, Redis)
+│   ├── db/                  # Implementaciones de persistencia
+│   │   ├── models/         # Modelos de Mongoose
+│   │   └── repositories/   # Implementaciones de repositorios MongoDB
+│   ├── redis/              # Implementación de repositorio Redis
+│   ├── vector-store/       # Implementación de repositorio Qdrant
+│   ├── email/              # Servicio de email
+│   ├── http/               # Capa HTTP
+│   │   ├── routes/         # Definición de rutas
+│   │   ├── middlewares/    # Middlewares HTTP
+│   │   └── utils/          # Utilidades HTTP
+│   ├── services/           # Servicios de infraestructura
+│   │   ├── core/           # Servicios core (embedding, LLM, etc.)
+│   │   └── adapters/       # Adaptadores de servicios
+│   ├── workers/            # Workers para procesamiento asíncrono
+│   └── scripts/            # Scripts de utilidad
+│
+└── interfaces/              # Capa de Interfaces
+    └── http/
+        └── controllers/    # Controladores HTTP
+```
+
+### Flujo de Dependencias
+
+```
+HTTP Request
+    ↓
+[Interfaces Layer] Controllers
+    ↓
+[Application Layer] Use Cases
+    ↓
+[Domain Layer] Entities, Services, Repositories (interfaces)
+    ↓
+[Infrastructure Layer] Implementaciones concretas
+    ↓
+Bases de Datos / Servicios Externos
+```
+
+### Principios de la Arquitectura
+
+1. **Independencia de Frameworks**: El dominio no depende de Express, Mongoose u otras librerías externas
+2. **Testabilidad**: Las capas pueden ser testeadas independientemente mediante mocks/stubs
+3. **Independencia de UI**: La lógica de negocio no depende de la interfaz HTTP
+4. **Independencia de Base de Datos**: El dominio no conoce detalles de MongoDB, Redis o Qdrant
+5. **Independencia de Agentes Externos**: Los servicios externos (OpenAI, Email) están abstraídos
+
+### Capas Detalladas
+
+#### 1. Domain Layer (`src/domain/`)
+**Responsabilidad**: Contiene la lógica de negocio pura, sin dependencias externas.
+
+- **Entities** (`entities/`): Modelos de dominio (User, Tenant)
+- **Repositories** (`repositories/`): Interfaces que definen contratos para acceso a datos
+  - `IUserRepository`, `IPdfRepository`, `IVectorRepository`, etc.
+- **Services** (`services/`): Servicios de dominio (PasswordService, TokenService, etc.)
+- **Exceptions** (`exceptions/`): Excepciones de dominio personalizadas
+- **Utils** (`utils/`): Utilidades de dominio (tenant-helpers)
+
+#### 2. Application Layer (`src/application/`)
+**Responsabilidad**: Orquesta los casos de uso y coordina entre el dominio y la infraestructura.
+
+- **Use Cases** (`use-cases/`): Casos de uso organizados por dominio funcional
+  - `auth/`: LoginUserUseCase, RegisterUserUseCase, etc.
+  - `pdf/`: UploadPdfUseCase, ProcessPdfUseCase, EmbedPdfChunksUseCase
+  - `rag/`: SearchRagQueryUseCase
+  - `conversation/`: GetConversationUseCase, CloseConversationUseCase, etc.
+  - `metrics/`: GetCurrentMetricsUseCase, GetMetricsHistoryUseCase, etc.
+  - `session/`: GetMySessionsUseCase, CloseSessionUseCase, etc.
+  - `privacy/`: DeleteMyDataUseCase, GetMyDataSummaryUseCase, etc.
+  - `admin/`: AdminDeleteUserDataUseCase, AdminExportUserDataUseCase
+- **DTOs** (`dtos/`): Objetos de transferencia de datos (LoginRequest, RagQueryResponse, etc.)
+
+#### 3. Infrastructure Layer (`src/infrastructure/`)
+**Responsabilidad**: Implementaciones concretas de repositorios, servicios y configuraciones.
+
+- **Config** (`config/`): Configuraciones de conexión (MongoDB, Redis)
+- **DB** (`db/`):
+  - `models/`: Modelos Mongoose (UserModel, PdfModel, etc.)
+  - `repositories/`: Implementaciones MongoDB (UserRepositoryMongo, PdfRepositoryMongo, etc.)
+- **Redis** (`redis/`): Implementación de SessionRepositoryRedis
+- **Vector Store** (`vector-store/`): Implementación de QdrantVectorRepository
+- **Email** (`email/`): Servicio de envío de emails con templates
+- **HTTP** (`http/`):
+  - `routes/`: Definición de rutas Express
+  - `middlewares/`: Middlewares (auth, rate-limit, validation, etc.)
+- **Services** (`services/`):
+  - `core/`: Servicios core (embedding, LLM, PDF processing, etc.)
+  - `adapters/`: Adaptadores que envuelven servicios core
+- **Workers** (`workers/`): Workers para procesamiento asíncrono de PDFs
+
+#### 4. Interfaces Layer (`src/interfaces/`)
+**Responsabilidad**: Punto de entrada HTTP, adapta requests HTTP a casos de uso.
+
+- **Controllers** (`http/controllers/`): Controladores que:
+  - Reciben requests HTTP
+  - Validan y transforman datos a DTOs
+  - Instancian y ejecutan casos de uso
+  - Manejan excepciones y formatean respuestas
+  - Ejemplos: AuthController, DocController, RagController, etc.
+
+### Ejemplo de Flujo Completo
+
+**Request: POST /api/auth/login**
+
+1. **HTTP Layer** (`app.js`):
+   - Middleware de rate limiting
+   - Middleware de sanitización
+   - Routing a `/api/auth/login`
+
+2. **Route** (`infrastructure/http/routes/auth.routes.js`):
+   - Valida request con express-validator
+   - Llama a `AuthController.login()`
+
+3. **Controller** (`interfaces/http/controllers/AuthController.js`):
+   - Extrae datos del request
+   - Crea `LoginRequest` DTO
+   - Instancia `LoginUserUseCase` con dependencias
+   - Ejecuta el caso de uso
+   - Maneja excepciones y retorna respuesta
+
+4. **Use Case** (`application/use-cases/auth/LoginUserUseCase.js`):
+   - Usa `IUserRepository` (interfaz) para buscar usuario
+   - Usa `PasswordService` para verificar contraseña
+   - Usa `TokenService` para generar JWT
+   - Usa `ISessionRepository` para crear sesión
+   - Retorna `LoginResponse` DTO
+
+5. **Infrastructure**:
+   - `UserRepositoryMongo` implementa `IUserRepository`
+   - `SessionRepositoryRedis` implementa `ISessionRepository`
+   - Accede a MongoDB y Redis según corresponda
+
+### Ventajas de esta Arquitectura
+
+- **Mantenibilidad**: Cambios en una capa no afectan otras
+- **Testabilidad**: Fácil crear mocks de repositorios y servicios
+- **Escalabilidad**: Fácil agregar nuevos casos de uso o cambiar implementaciones
+- **Separación de Responsabilidades**: Cada capa tiene una responsabilidad clara
+- **Flexibilidad**: Fácil cambiar de MongoDB a otra DB, o de Express a otro framework
+
 ## Diagrama de Flujo del Sistema
 
 ```mermaid
@@ -158,21 +327,47 @@ flowchart TD
 
 ### Bases de Datos
 
-1. **MongoDB**
-   - **Colección: Users** - Información de usuarios y autenticación
-   - **Colección: PDFs** - Metadata de archivos PDF subidos (status: uploaded, processing, processed, error)
-   - **Colección: Chunks** - Fragmentos de texto extraídos de PDFs (status: chunked, embedded)
-   - **Colección: Metrics** - Métricas del sistema
+1. **MongoDB** - Base de datos principal (multi-tenant)
+   
+   **Colecciones:**
+   - **Tenants** - Organizaciones/clientes del sistema (multi-tenancy)
+     - Campos: name, slug, settings (rate limits, LLM model, etc.)
+   - **Users** - Usuarios del sistema
+     - Campos: tenantId, email, password, name, role, emailVerified, verificationToken, resetPasswordToken, allowHistory
+     - Índices: tenantId + email (único), tenantId
+   - **PDFs** - Metadata de archivos PDF subidos
+     - Campos: tenantId, userId, filename, originalName, filePath, fileSize, status (uploaded, processing, processed, error), uploadedAt, processedAt
+     - Índices: tenantId + userId, tenantId
+   - **Chunks** - Fragmentos de texto extraídos de PDFs
+     - Campos: tenantId, pdfId, content, page, index, status (chunked, embedded)
+     - Índices: tenantId + pdfId, tenantId
+   - **Conversations** - Conversaciones de RAG con contexto
+     - Campos: tenantId, userId, pdfId, title, isActive, contextWindowSize, messageCount, summary, totalTokens, tokenCost
+     - Índices: tenantId + userId + pdfId + isActive (único parcial), tenantId + userId
+   - **Messages** - Mensajes dentro de conversaciones
+     - Campos: tenantId, conversationId, role (user/assistant), content, index, metadata (pdfId, chunks, tokens)
+     - Índices: tenantId + conversationId, tenantId
+   - **LoginHistory** - Historial de inicios de sesión
+     - Campos: tenantId, userId, tokenId, ipAddress, userAgent, loggedInAt, loggedOutAt, sessionDuration
+     - Índices: tenantId + userId, tenantId
+   - **Metrics** - Métricas del sistema
+     - Campos: tenantId, timestamp, metrics (varios tipos de métricas agregadas)
 
-2. **Qdrant (Vector Database)**
+2. **Qdrant (Vector Database)** - Base de datos vectorial
    - **Colección: pdf_chunks** - Almacena vectores de embeddings
    - **Dimensiones:** 1536 (text-embedding-3-small)
    - **Distancia:** Cosine similarity
-   - **Payload:** pdfId, chunkId, index, page, content
+   - **Payload:** pdfId, chunkId, index, page, content, tenantId
+   - **Filtros:** Soporte para filtrado por tenantId y pdfId
 
-3. **Redis (Caché)**
+3. **Redis (Caché y Sesiones)**
    - **Caché de Embeddings** - TTL: 7 días
+     - Clave: `embedding:{hash}` → Vector embedding
    - **Caché de Respuestas RAG** - TTL: 24 horas
+     - Clave: `rag:{pdfId}:{questionHash}` → Respuesta completa
+   - **Sesiones de Usuario** - TTL: Configurable (default: 24h)
+     - Clave: `session:{tenantId}:{userId}:{tokenId}` → Datos de sesión
+     - Estructura: { tokenId, userId, tenantId, ipAddress, userAgent, createdAt, lastActivityAt }
 
 ### Modelos LLM Utilizados
 
@@ -188,13 +383,70 @@ flowchart TD
    - **Temperature:** 0.2 (baja para respuestas más determinísticas)
    - **Contexto:** Hasta 4000 caracteres de chunks relevantes
 
+### Funcionalidades del Sistema
+
+#### Autenticación y Autorización
+- **Registro de usuarios** con verificación de email
+- **Login multi-tenant** (soporte para múltiples organizaciones)
+- **Gestión de sesiones** con Redis (tracking de IP, User-Agent, duración)
+- **JWT tokens** para autenticación
+- **Reset de contraseña** con tokens seguros
+- **Gestión de perfil** (actualización de nombre y email)
+
+#### Gestión de PDFs
+- **Upload de PDFs** con validación de tipo y tamaño
+- **Procesamiento asíncrono** en Worker Threads
+- **Chunking inteligente** (1200 chars, overlap 200)
+- **Generación de embeddings** en lotes
+- **Almacenamiento vectorial** en Qdrant
+- **Eliminación segura** de PDFs y sus datos asociados
+
+#### RAG (Retrieval Augmented Generation)
+- **Búsqueda vectorial** en Qdrant
+- **Contexto inteligente** con fallback
+- **Caché de respuestas** y embeddings
+- **Conversaciones persistentes** con historial
+- **Tracking de tokens** y costos por conversación
+- **Resumen automático** de conversaciones largas
+
+#### Conversaciones
+- **Conversaciones por PDF** (una activa por usuario/PDF)
+- **Historial de mensajes** con contexto
+- **Ventana de contexto** configurable
+- **Estadísticas de tokens** por conversación
+- **Cierre y reactivación** de conversaciones
+
+#### Métricas y Monitoreo
+- **Métricas en tiempo real** del sistema
+- **Historial de métricas** agregadas
+- **Métricas por tenant** (multi-tenancy)
+- **Exportación de datos** de métricas
+- **Tracking de uso** de recursos (tokens, embeddings, etc.)
+
+#### Privacidad y Cumplimiento
+- **Eliminación de datos personales** (GDPR-ready)
+- **Anonimización de historial** de login
+- **Preferencias de historial** por usuario
+- **Exportación de datos** del usuario
+- **Eliminación de conversaciones** individuales
+
+#### Administración
+- **Panel de administración** para gestión de usuarios
+- **Exportación de datos** de usuarios
+- **Eliminación de datos** de usuarios (admin)
+
 ### Pipelines Detallados
 
 #### 1. Pipeline de Autenticación
-- Login con credenciales
-- Validación en MongoDB
-- Generación de JWT
-- Middleware de verificación en cada request protegido
+1. Validación de credenciales (email, password, tenantSlug)
+2. Búsqueda de tenant por slug
+3. Búsqueda de usuario por email + tenantId
+4. Verificación de contraseña con bcrypt
+5. Verificación de email verificado
+6. Generación de JWT token
+7. Creación de sesión en Redis
+8. Registro en LoginHistory
+9. Retorno de token y datos de usuario
 
 #### 2. Pipeline de Upload de PDF
 1. Validación de autenticación
@@ -230,39 +482,80 @@ flowchart TD
 8. Actualización de status a "embedded"
 9. Invalidación de caché RAG
 
-#### 5. Pipeline de RAG Query
+#### 5. Pipeline de RAG Query (con Conversaciones)
 1. Validación de entrada (pdfId + question)
-2. Rate limiting por usuario
+2. Rate limiting por usuario y tenant
 3. Verificación de caché de respuesta completa
-4. Verificación de caché de embedding de pregunta
-5. Si no hay caché: generación de embedding
-6. Búsqueda vectorial en Qdrant (top 20, threshold 0.5)
-7. Obtención de chunks relevantes de MongoDB
-8. Construcción de contexto (máx 4000 chars)
-9. Fallback si no hay contexto (primeros chunks o keywords)
-10. Creación de prompt con contexto
-11. Llamada a LLM (GPT-4o-mini)
-12. Guardado en caché
-13. Retorno de respuesta
+4. **Gestión de conversación:**
+   - Buscar conversación activa para usuario + PDF
+   - Si no existe, crear nueva conversación
+   - Obtener mensajes anteriores (contexto de conversación)
+5. Verificación de caché de embedding de pregunta
+6. Si no hay caché: generación de embedding
+7. Búsqueda vectorial en Qdrant (top 20, threshold 0.5, filtro por tenantId + pdfId)
+8. Obtención de chunks relevantes de MongoDB
+9. Construcción de contexto:
+   - Contexto de conversación (mensajes anteriores)
+   - Chunks relevantes del PDF (máx 4000 chars)
+   - Fallback si no hay contexto (primeros chunks o keywords)
+10. Creación de prompt con contexto completo
+11. Llamada a LLM (GPT-4o-mini, temperature 0.2)
+12. Guardado de mensajes (user + assistant) en MongoDB
+13. Actualización de estadísticas de tokens y costos
+14. Guardado en caché de respuesta
+15. **Resumen automático** (si la conversación excede límite de mensajes)
+16. Retorno de respuesta con contexto
+
+### Multi-Tenancy
+
+El sistema está diseñado con soporte completo para **multi-tenancy**, permitiendo que múltiples organizaciones (tenants) compartan la misma instancia del sistema de forma aislada.
+
+**Características:**
+- **Aislamiento de datos:** Todos los datos están asociados a un `tenantId`
+- **Configuración por tenant:** Cada tenant puede tener:
+  - Límites de rate limiting personalizados
+  - Modelo LLM configurable
+  - Límites de tokens y documentos
+- **Slug de tenant:** Identificación amigable por URL (ej: `/api/...?tenantSlug=acme`)
+- **Tenant por defecto:** Si no se especifica, se usa "default"
+- **Índices optimizados:** Todos los índices de MongoDB incluyen `tenantId` como primer campo
+
+**Implementación:**
+- Middleware de autenticación valida `tenantId` del token JWT
+- Todos los repositorios filtran por `tenantId` automáticamente
+- Qdrant incluye `tenantId` en el payload de vectores para filtrado
+- Redis usa `tenantId` en las claves de sesión
 
 ### Validaciones y Seguridad
 
-- **Autenticación JWT:** Verificación en cada request protegido
+- **Autenticación JWT:** 
+  - Verificación en cada request protegido
+  - Validación de `tenantId` en el token
+  - Expiración configurable de tokens
 - **Rate Limiting:** 
-  - Global: 200 req/min
-  - Por usuario: Límites específicos por operación
+  - **Global:** 200 req/min por IP
+  - **Por usuario:** Límites específicos por operación
+  - **Por tenant:** Límites configurables por tenant (ragPerMinute, uploadPerMinute, processPerMinute)
+  - **Endpoints críticos:** Límites más estrictos (login: 5 req/min)
 - **Validación de Archivos:** 
-  - Tipo: Solo PDF
-  - Tamaño: Máximo 50MB
+  - Tipo: Solo PDF (validación MIME type)
+  - Tamaño: Máximo 50MB (configurable)
+  - Sanitización de nombres de archivo
 - **Validación de Datos:**
-  - ObjectId de MongoDB
-  - Longitud de strings (question: 3-1000 chars)
+  - ObjectId de MongoDB (validación de formato)
+  - Longitud de strings (question: 3-1000 chars, name: 1-100 chars)
+  - Validación de email (formato y dominio)
   - Sanitización MongoDB (prevención NoSQL injection)
+  - Express-validator para validación de requests
 - **Seguridad:**
-  - Helmet (headers HTTP seguros)
-  - CORS configurado
-  - Security Logger
-  - Sanitización de inputs
+  - **Helmet:** Headers HTTP seguros (CSP, HSTS, etc.)
+  - **CORS:** Configurado con orígenes permitidos
+  - **Security Logger:** Logging de intentos de acceso y errores
+  - **Sanitización de inputs:** Escape de caracteres peligrosos
+  - **Bcrypt:** Hashing de contraseñas (10 rounds)
+  - **Tokens seguros:** Verificación y reset de contraseña con tokens criptográficos
+  - **Sesiones:** Tracking de sesiones con IP y User-Agent
+  - **Graceful shutdown:** Cierre ordenado de conexiones y recursos
 
 ### Optimizaciones de Memoria
 
@@ -285,6 +578,13 @@ REDIS_URL=redis://localhost:6379
 # OpenAI
 OPENAI_API_KEY=sk-...
 EMBEDDING_MODEL=text-embedding-3-small
+LLM_MODEL=gpt-4o-mini
+LLM_TEMPERATURE=0.2
+
+# JWT y Autenticación
+JWT_SECRET=tu-secret-key-super-segura
+JWT_EXPIRES_IN=24h
+SESSION_TTL_HOURS=24
 
 # Límites y Configuración
 PDF_MAX_FILE_SIZE_MB=50
@@ -294,14 +594,64 @@ QDRANT_BATCH_SIZE=50
 RAG_SEARCH_LIMIT=20
 RAG_SCORE_THRESHOLD=0.5
 RAG_MAX_CONTEXT_LENGTH=4000
+RAG_FALLBACK_CONTEXT_LENGTH=8000
+CONVERSATION_CONTEXT_WINDOW_SIZE=10
+CONVERSATION_SUMMARY_THRESHOLD=20
 
 # Caché
 CACHE_ENABLED=true
-CACHE_TTL_EMBEDDING=604800  # 7 días
-CACHE_TTL_RAG_RESPONSE=86400  # 24 horas
+CACHE_TTL_EMBEDDING=604800  # 7 días (segundos)
+CACHE_TTL_RAG_RESPONSE=86400  # 24 horas (segundos)
 
 # Rate Limiting
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=200
+RATE_LIMIT_WINDOW_MS=60000  # 1 minuto
+RATE_LIMIT_MAX_REQUESTS=200  # Global
+RATE_LIMIT_AUTH_MAX_REQUESTS=5  # Login/Register
+RATE_LIMIT_UPLOAD_PER_MINUTE=100  # Por usuario
+RATE_LIMIT_PROCESS_PER_MINUTE=200  # Por usuario
+RATE_LIMIT_RAG_PER_MINUTE=500  # Por usuario
+
+# Express
+EXPRESS_JSON_LIMIT_MB=10
+PORT=3000
+NODE_ENV=development
+
+# CORS
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# Sesiones
+SESSION_CLEANUP_INTERVAL_MINUTES=15
+
+# Email (si se usa servicio de email)
+EMAIL_FROM=noreply@example.com
+EMAIL_SERVICE=...  # Configuración del servicio de email
+
+# Multi-Tenancy
+DEFAULT_TENANT_SLUG=default
+```
+
+### Configuración por Tenant
+
+Los tenants pueden tener configuraciones personalizadas almacenadas en MongoDB:
+
+```javascript
+{
+  name: "Nombre del Tenant",
+  slug: "tenant-slug",
+  settings: {
+    maxUsers: 10,
+    maxPdfs: 100,
+    llmModel: "gpt-4o-mini",
+    ragLimits: {
+      maxTokens: 3500,
+      documentPriority: 0.7
+    },
+    rateLimits: {
+      ragPerMinute: 500,
+      uploadPerMinute: 100,
+      processPerMinute: 200
+    }
+  }
+}
 ```
 

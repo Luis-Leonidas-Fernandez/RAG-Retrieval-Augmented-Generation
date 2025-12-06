@@ -5,11 +5,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
-import routes from "./routes/index.routes.js";
-import { generalRateLimit } from "./middlewares/rate-limit.middleware.js";
-import { securityLogger } from "./middlewares/security-logger.middleware.js";
-import { mongoSanitizeMiddleware } from "./middlewares/mongo-sanitize.middleware.js";
-import { errorHandler, notFoundHandler } from "./middlewares/error-handler.middleware.js";
+import routes from "./infrastructure/http/routes/index.routes.js";
+import { generalRateLimit } from "./infrastructure/http/middlewares/rate-limit.middleware.js";
+import { securityLogger } from "./infrastructure/http/middlewares/security-logger.middleware.js";
+import { mongoSanitizeMiddleware } from "./infrastructure/http/middlewares/mongo-sanitize.middleware.js";
+import { errorHandler, notFoundHandler } from "./infrastructure/http/middlewares/error-handler.middleware.js";
 
 dotenv.config();
 

@@ -506,6 +506,98 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 11px;
     }
+
+    /* Estilos para tablas estructuradas */
+    .structured-data-container {
+      margin-top: 20px;
+      margin-bottom: 16px;
+    }
+
+    .structured-table-wrapper {
+      overflow-x: auto;
+      max-height: 500px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      margin-top: 12px;
+      background: rgba(15, 23, 42, 0.5);
+    }
+
+    .structured-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .structured-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    .structured-table th {
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--accent);
+      border-bottom: 2px solid rgba(56, 189, 248, 0.3);
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    .structured-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      color: var(--text-main);
+    }
+
+    .structured-table tbody tr:hover {
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .structured-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .table-info {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: rgba(56, 189, 248, 0.1);
+      border-radius: 6px;
+    }
+
+    .export-button {
+      margin-top: 16px;
+      padding: 10px 20px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .export-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
+    }
+
+    .export-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .export-button:disabled:hover {
+      transform: none;
+      box-shadow: none;
+    }
   </style>
 </head>
 <body>
@@ -641,11 +733,13 @@
           return;
         }
 
-        // Filtramos por PDFs procesados (opcional: podrías mostrar todos)
-        const processed = pdfList.filter((pdf) => pdf.status === "processed");
+        // Filtramos por PDFs procesados y embebidos (processed o ready)
+        const processed = pdfList.filter((pdf) => 
+          pdf.status === "processed" || pdf.status === "ready"
+        );
         if (!processed.length) {
           statusEl.textContent =
-            "No hay PDFs con estado 'processed'. Ve a pdfs.html, procésalos y envíalos a Qdrant primero.";
+            "No hay PDFs procesados y embebidos. Ve a pdfs.html, procésalos y envíalos a Qdrant primero.";
           return;
         }
 
@@ -662,7 +756,7 @@
             ? new Date(pdf.createdAt).toLocaleString()
             : "-";
 
-          const tagClass = pdf.status === "processed" ? "" : " pending";
+          const tagClass = (pdf.status === "processed" || pdf.status === "ready") ? "" : " pending";
 
           li.innerHTML = `
             <div class="pdf-name">${pdf.originalName || pdf.fileName || pdf._id}</div>
@@ -717,6 +811,30 @@
       } else {
         metaEl.innerHTML =
           '<span><span class="chat-meta-dot"></span> Esperando selección de PDF</span>';
+      }
+
+      // 🔄 Limpiar el área de pregunta y respuestas al seleccionar un documento
+      const questionInput = document.getElementById("question-input");
+      const resultsBox = document.getElementById("results");
+      const answerEl = document.getElementById("answer-text");
+      const statusEl = document.getElementById("rag-status");
+
+      // Limpiar el textarea de pregunta
+      if (questionInput) {
+        questionInput.value = "";
+      }
+
+      // Ocultar y limpiar el área de resultados
+      if (resultsBox) {
+        resultsBox.style.display = "none";
+      }
+      if (answerEl) {
+        answerEl.innerHTML = "";
+      }
+
+      // Limpiar el mensaje de estado
+      if (statusEl) {
+        statusEl.textContent = "";
       }
     }
 
@@ -843,6 +961,139 @@
       return html;
     }
 
+    /**
+     * Renderiza datos estructurados como tabla HTML
+     * @param {Array<Object>} structuredData - Array de objetos con datos estructurados
+     * @param {number} totalRows - Total de filas encontradas
+     * @returns {string} HTML de la tabla
+     */
+    function renderStructuredData(structuredData, totalRows) {
+      if (!structuredData || !Array.isArray(structuredData) || structuredData.length === 0) {
+        return '';
+      }
+
+      // Detectar todas las columnas posibles desde las keys de todos los objetos
+      const allColumns = new Set();
+      structuredData.forEach(row => {
+        if (row && typeof row === 'object') {
+          Object.keys(row).forEach(key => allColumns.add(key));
+        }
+      });
+
+      const columns = Array.from(allColumns).sort();
+
+      if (columns.length === 0) {
+        return '';
+      }
+
+      // Construir HTML de la tabla
+      let tableHTML = '<div class="structured-data-container">';
+      tableHTML += '<div class="structured-table-wrapper">';
+      tableHTML += '<table class="structured-table">';
+      
+      // Encabezados
+      tableHTML += '<thead><tr>';
+      columns.forEach(col => {
+        const headerText = col.charAt(0).toUpperCase() + col.slice(1);
+        tableHTML += `<th>${headerText}</th>`;
+      });
+      tableHTML += '</tr></thead>';
+
+      // Filas de datos
+      tableHTML += '<tbody>';
+      structuredData.forEach(row => {
+        tableHTML += '<tr>';
+        columns.forEach(col => {
+          const value = row[col] !== null && row[col] !== undefined ? String(row[col]) : '';
+          tableHTML += `<td>${value}</td>`;
+        });
+        tableHTML += '</tr>';
+      });
+      tableHTML += '</tbody>';
+
+      tableHTML += '</table>';
+      tableHTML += '</div>';
+
+      // Mensaje informativo si hay más filas
+      if (totalRows > structuredData.length) {
+        tableHTML += `<div class="table-info">`;
+        tableHTML += `En la tabla se muestran las primeras ${structuredData.length} filas de ${totalRows} totales. `;
+        tableHTML += `El archivo Excel contiene todos los registros.`;
+        tableHTML += `</div>`;
+      }
+
+      tableHTML += '</div>';
+
+      return tableHTML;
+    }
+
+    /**
+     * Descarga archivo Excel desde el servidor
+     * @param {string} exportId - ID del export a descargar
+     */
+    async function downloadExcel(exportId) {
+      if (!exportId) {
+        console.error('Export ID no proporcionado');
+        return;
+      }
+
+      const exportBtn = document.getElementById('export-excel-btn');
+      if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.textContent = 'Generando Excel...';
+      }
+
+      try {
+        const token = localStorage.getItem('rag_auth_token');
+        if (!token) {
+          throw new Error('No hay token de autenticación');
+        }
+
+        const res = await fetch(`/api/rag/export/${exportId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ message: 'Error al descargar Excel' }));
+          throw new Error(errorData.message || 'Error al descargar Excel');
+        }
+
+        // Obtener nombre de archivo desde headers o generar uno
+        const contentDisposition = res.headers.get('Content-Disposition');
+        let filename = `export-${Date.now()}.xlsx`;
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+          if (filenameMatch) {
+            filename = filenameMatch[1];
+          }
+        }
+
+        // Crear blob y descargar
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        console.log(`Excel descargado: ${filename}`);
+      } catch (error) {
+        console.error('Error al descargar Excel:', error);
+        alert(`Error al descargar Excel: ${error.message}`);
+      } finally {
+        if (exportBtn) {
+          exportBtn.disabled = false;
+          exportBtn.innerHTML = '📥 Descargar Excel';
+        }
+      }
+    }
+
     async function sendQuestion() {
       const questionInput = document.getElementById("question-input");
       const statusEl = document.getElementById("rag-status");
@@ -895,8 +1146,31 @@
         // Procesar la respuesta para convertir Markdown básico a HTML
         const formattedAnswer = formatMarkdownToHtml(data.data?.answer || "(sin respuesta)");
         
+        // Construir HTML completo de la respuesta
+        let fullAnswerHTML = formattedAnswer;
+        
+        // Detectar si hay datos estructurados
+        if (data.data?.structuredData && Array.isArray(data.data.structuredData) && data.data.structuredData.length > 0) {
+          const totalRows = data.data.totalRows || data.data.structuredData.length;
+          const tableHTML = renderStructuredData(data.data.structuredData, totalRows);
+          fullAnswerHTML += tableHTML;
+          
+          // Agregar botón de descarga si existe exportId
+          if (data.data.exportId) {
+            const exportId = data.data.exportId;
+            fullAnswerHTML += `<button id="export-excel-btn" class="export-button" data-export-id="${exportId}">📥 Descargar Excel</button>`;
+          }
+        }
+        
         // Mostrar la respuesta con efecto suave
-        answerEl.innerHTML = formattedAnswer;
+        answerEl.innerHTML = fullAnswerHTML;
+        
+        // Configurar evento del botón de descarga si existe
+        const exportBtn = document.getElementById('export-excel-btn');
+        if (exportBtn) {
+          const exportId = exportBtn.getAttribute('data-export-id');
+          exportBtn.addEventListener('click', () => downloadExcel(exportId));
+        }
         
         // Auto-scroll al final del contenido después de renderizar
         setTimeout(() => {

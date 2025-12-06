@@ -2,14 +2,14 @@ import dotenv from "dotenv";
 dotenv.config();
 import http from "http";
 import app from "./app.js";
-import { dbConnection, closeDbConnection } from "./config/db.js";
-import { initQdrant } from "./services/qdrant.service.js";
-import { initRedis, closeRedis } from "./config/redis.js";
-import { closePdfPool, getPdfPool } from "./services/pdf-process.service.js";
-import { startMetricsCollection, stopMetricsCollection } from "./services/metrics-collector.service.js";
-import { setPdfPoolGetter } from "./services/metrics.service.js";
-import { cleanupExpiredUserSessions } from "./services/session.service.js";
-import { TenantModel } from "./models/tenant.model.js";
+import { dbConnection, closeDbConnection } from "./infrastructure/config/db.js";
+import { initQdrant } from "./infrastructure/services/core/qdrant.service.js";
+import { initRedis, closeRedis } from "./infrastructure/config/redis.js";
+import { closeDocPool, getDocPool } from "./infrastructure/services/core/doc-process.service.js";
+import { startMetricsCollection, stopMetricsCollection } from "./infrastructure/services/core/metrics-collector.service.js";
+import { setDocPoolGetter } from "./infrastructure/services/core/metrics.service.js";
+import { cleanupExpiredUserSessions } from "./infrastructure/services/core/session.service.js";
+import { TenantModel } from "./infrastructure/db/models/tenant.model.js";
 
 let server = null;
 let isShuttingDown = false;
@@ -63,7 +63,7 @@ const gracefulShutdown = async (signal) => {
     await closeDbConnection();
 
     // 5. Cerrar Worker Pool
-    await closePdfPool();
+    await closeDocPool();
 
     // 6. Detener recolección de métricas
     stopMetricsCollection();
@@ -111,9 +111,9 @@ try {
   server.listen(port, () => {
     console.log(`[Server] Servidor conectado en el puerto: ${port}`);
   });
-
+  
   // 6) Registrar getter del pool de workers para métricas
-  setPdfPoolGetter(getPdfPool);
+  setDocPoolGetter(getDocPool);
 
   // 7) Iniciar recolección periódica de métricas
   startMetricsCollection();

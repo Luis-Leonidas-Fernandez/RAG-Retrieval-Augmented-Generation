@@ -149,23 +149,40 @@ export async function fetchWithAuth(url, options = {}) {
 /**
  * Iniciar sesión
  */
-export async function login(email, password) {
+export async function login(email, password, tenantSlug = "default") {
   try {
+    // Normalizar tenantSlug a lowercase
+    const normalizedTenantSlug = tenantSlug ? tenantSlug.toLowerCase().trim() : "default";
+
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ 
+        email, 
+        password,
+        tenantSlug: normalizedTenantSlug 
+      }),
     });
 
     const data = await response.json();
 
     if (response.ok && data.ok && data.data) {
       setToken(data.data.token, data.data.user);
-      return { success: true, user: data.data.user };
+      return { 
+        success: true, 
+        user: data.data.user,
+        requiresVerification: data.data?.requiresVerification || false,
+        email: data.data?.email || email
+      };
     } else {
-      return { success: false, error: data.message || 'Error al iniciar sesión' };
+      return { 
+        success: false, 
+        error: data.message || 'Error al iniciar sesión',
+        requiresVerification: data.data?.requiresVerification || false,
+        email: data.data?.email || email
+      };
     }
   } catch (error) {
     console.error('Error en login:', error);
@@ -264,6 +281,64 @@ export async function resendVerification(email) {
     }
   } catch (error) {
     console.error('[AUTH.JS] Error al reenviar verificación:', error);
+    return { success: false, error: 'Error de conexión. Por favor intenta nuevamente.' };
+  }
+}
+
+/**
+ * Solicitar reset de contraseña
+ */
+export async function requestPasswordReset(email, tenantSlug = "default") {
+  try {
+    // Normalizar tenantSlug a lowercase
+    const normalizedTenantSlug = tenantSlug ? tenantSlug.toLowerCase().trim() : "default";
+
+    const response = await fetch('/api/auth/request-password-reset', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        email,
+        tenantSlug: normalizedTenantSlug 
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.ok) {
+      return { success: true, message: data.message };
+    } else {
+      return { success: false, error: data.message || 'Error al solicitar reset de contraseña' };
+    }
+  } catch (error) {
+    console.error('[AUTH.JS] Error al solicitar reset de contraseña:', error);
+    return { success: false, error: 'Error de conexión. Por favor intenta nuevamente.' };
+  }
+}
+
+/**
+ * Resetear contraseña usando token
+ */
+export async function resetPassword(token, newPassword, confirmPassword) {
+  try {
+    const response = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token, newPassword, confirmPassword }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.ok) {
+      return { success: true, message: data.message };
+    } else {
+      return { success: false, error: data.message || 'Error al restablecer contraseña' };
+    }
+  } catch (error) {
+    console.error('[AUTH.JS] Error al restablecer contraseña:', error);
     return { success: false, error: 'Error de conexión. Por favor intenta nuevamente.' };
   }
 }

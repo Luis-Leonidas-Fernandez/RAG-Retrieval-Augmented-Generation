@@ -25,6 +25,13 @@ CACHE_ENABLED=true
 CACHE_TTL_EMBEDDING=604800
 CACHE_TTL_RAG_RESPONSE=86400
 
+# Microservicio Docling para procesamiento de PDFs (versión 2.64.0+)
+DOCLING_SERVICE_URL="http://localhost:8000"
+DOCLING_SERVICE_TIMEOUT=600000
+DOCLING_MAX_NUM_PAGES=500
+DOCLING_MAX_FILE_SIZE_BYTES=52428800
+DOCLING_CONTAINER_UPLOADS_PATH="/app/uploads"
+
 # Optimización de Memoria
 PDF_MAX_FILE_SIZE_MB=50
 PDF_BATCH_SIZE=100
@@ -32,6 +39,7 @@ QDRANT_BATCH_SIZE=50
 EMBEDDING_BATCH_SIZE=64
 EMBEDDING_MAX_TEXTS=200
 RAG_MAX_CONTEXT_LENGTH=4000
+RAG_SCORE_THRESHOLD=0.3
 EXPRESS_JSON_LIMIT_MB=10
 
 # Sistema de Métricas y Alertas
@@ -58,6 +66,11 @@ ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173"
 - `EMBEDDING_BATCH_SIZE`: Tamaño de batch para embeddings de OpenAI. Por defecto 64.
 - `EMBEDDING_MAX_TEXTS`: Límite máximo de textos a procesar en una sola llamada a embedBatch. Por defecto 200.
 - `RAG_MAX_CONTEXT_LENGTH`: Longitud máxima del contexto en caracteres para respuestas RAG. Por defecto 4000.
+- `RAG_SCORE_THRESHOLD`: Umbral mínimo de similitud (score) para considerar un chunk como relevante en búsquedas RAG. Valor entre 0.0 y 1.0. Por defecto 0.3. Valores más bajos (0.25-0.35) traen más resultados pero pueden incluir ruido. Valores más altos (0.4-0.6) son más estrictos pero pueden perder resultados relevantes. Para solicitudes de índice se usa automáticamente 0.3.
+- `DOCLING_MAX_NUM_PAGES`: Límite máximo de páginas que Docling procesará por PDF. Por defecto 500 páginas.
+- `DOCLING_MAX_FILE_SIZE_BYTES`: Límite máximo de tamaño de archivo en bytes para Docling. Por defecto 52428800 (50MB). Si no se define, se calcula automáticamente basado en `PDF_MAX_FILE_SIZE_MB`.
+- `DOCLING_CONTAINER_UPLOADS_PATH`: Ruta dentro del contenedor Docker donde se monta el directorio uploads. Por defecto `/app/uploads`. Solo cambiar si modificaste el volumen en Docker.
+- `DOCLING_SERVICE_TIMEOUT`: Timeout en milisegundos para las peticiones al servicio Docling. Por defecto 600000 (10 minutos). Para PDFs grandes o procesamiento lento, puede ser necesario aumentar este valor.
 
 **Recomendaciones según recursos del servidor**:
 - **Servidores pequeños (2GB RAM)**: Reduce `PDF_BATCH_SIZE=50`, `QDRANT_BATCH_SIZE=25`, `PDF_WORKER_THREADS=1`
@@ -65,9 +78,9 @@ ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173"
 - **Servidores grandes (8GB+ RAM)**: Puedes aumentar `PDF_BATCH_SIZE=200`, `QDRANT_BATCH_SIZE=100`, `PDF_WORKER_THREADS=4`
 
 **Configuración del Heap de Node.js**:
-- El tamaño máximo del heap está configurado a **512 MB** en `package.json` mediante el flag `--max-old-space-size=512`
-- Esto significa que Node.js puede usar hasta 512 MB de memoria heap antes de mostrar errores de "out of memory"
-- Si necesitas aumentar el heap, modifica `package.json` cambiando el valor `512` por el deseado (ej: `1024` para 1 GB)
+- El tamaño máximo del heap está configurado a **2048 MB (2 GB)** en `package.json` mediante el flag `--max-old-space-size=2048`
+- Esto significa que Node.js puede usar hasta 2 GB de memoria heap antes de mostrar errores de "out of memory"
+- Si necesitas aumentar o reducir el heap, modifica `package.json` cambiando el valor `2048` por el deseado (ej: `1024` para 1 GB, `4096` para 4 GB)
 - **Nota importante**: Después de cambiar el heap size, debes reiniciar el servidor para que los cambios surtan efecto
 
 ### 2. Instalar dependencias de Node.js
@@ -77,100 +90,103 @@ cd /Users/luis/Desktop/vector-database-rag
 npm install
 ```
 
-### 3. Levantar Qdrant con Docker
+### 3. Levantar servicios Docker
 
-Contenedor de Qdrant (puerto por defecto 6333) montando la carpeta `qdrant_data` de este proyecto:
+#### Comandos rápidos (recomendado)
 
+**Levantar todos los servicios (Qdrant, Redis, Docling y MongoDB) con una sola línea:**
 ```bash
-cd /Users/luis/Desktop/vector-database-rag
-docker run -p 6333:6333 \
-  -v "$(pwd)/qdrant_data:/qdrant/storage" \
-  qdrant/qdrant
+npm run docker:up && docker run -d --name mongo-rag -p 27017:27017 mongo:7 || docker start mongo-rag
 ```
 
-> Deja este contenedor corriendo en una terminal separada.
-
-### 4. Levantar MongoDB (si no tienes uno ya en marcha)
-
-Ejemplo rápido con Docker (Mongo en puerto 27017, volumen local opcional):
-
+**Detener todos los servicios con una sola línea:**
 ```bash
-docker run -d \
-  --name mongo-rag \
-  -p 27017:27017 \
-  mongo:7
+npm run docker:down && docker stop mongo-rag
 ```
 
-Si usas otra URL distinta, actualiza `DB_URL` en tu `.env`.
-
-### 5. Levantar Redis (si no tienes uno ya en marcha)
-
-Ejemplo rápido con Docker (Redis en puerto 6379):
-
+**Verificar estado de todos los contenedores:**
 ```bash
-docker run -d \
-  --name redis-rag \
-  -p 6379:6379 \
-  redis:7-alpine
+docker ps | grep -E "qdrant|redis|docling-rag|mongo-rag"
 ```
 
-**Si el contenedor ya existe**, puedes:
-
-- Verificar su estado:
+**Iniciar contenedores existentes (si están parados):**
 ```bash
-docker ps -a | grep redis-rag
+docker start mongo-rag redis-rag docling-rag qdrant-rag 2>/dev/null || npm run docker:up && docker run -d --name mongo-rag -p 27017:27017 mongo:7 || docker start mongo-rag
 ```
 
-- Si está parado, iniciarlo:
+#### Servicios individuales (si necesitas levantar uno específico)
+
+**Qdrant (puerto 6333):**
 ```bash
-docker start redis-rag
+docker run -d --name qdrant-rag -p 6333:6333 -v "$(pwd)/qdrant_data:/qdrant/storage" qdrant/qdrant
 ```
 
-- Si quieres eliminarlo y crear uno nuevo:
+**MongoDB (puerto 27017):**
 ```bash
-docker rm -f redis-rag
-docker run -d \
-  --name redis-rag \
-  -p 6379:6379 \
-  redis:7-alpine
+docker run -d --name mongo-rag -p 27017:27017 mongo:7
 ```
 
-Si usas otra URL distinta, actualiza `REDIS_URL` en tu `.env`.
-
-**Nota**: Redis es opcional pero recomendado para mejorar el rendimiento mediante caché de embeddings y respuestas RAG. Si no levantas Redis, la aplicación funcionará en modo degradado (sin caché).
-
-### 5.5. Comandos rápidos para Docker (Qdrant y Redis)
-
-**Levantar Qdrant y Redis con una sola línea:**
+**Redis (puerto 6379, opcional pero recomendado):**
 ```bash
-npm run docker:up
+docker run -d --name redis-rag -p 6379:6379 redis:7-alpine
 ```
 
-Este comando:
-- Inicia los contenedores si ya existen
-- O los crea si no existen
-
-**Detener Qdrant y Redis con una sola línea:**
+**Docling (puerto 8000, obligatorio para procesar PDFs):**
 ```bash
-npm run docker:down
+npm run docker:docling
 ```
 
-**Verificar estado de los contenedores:**
+#### Información sobre los servicios
+
+**Qdrant**:
+- Base de datos vectorial para almacenar embeddings
+- Puerto: 6333
+- Datos persistentes en: `qdrant_data/`
+
+**MongoDB**:
+- Base de datos principal para documentos, usuarios, chunks, etc.
+- Puerto: 27017
+- Si usas otra URL, actualiza `DB_URL` en tu `.env`
+
+**Redis** (opcional):
+- Caché para embeddings y respuestas RAG
+- Puerto: 6379
+- Si no levantas Redis, la aplicación funcionará en modo degradado (sin caché)
+- Si usas otra URL, actualiza `REDIS_URL` en tu `.env`
+
+**Docling** (obligatorio para PDFs):
+- Microservicio para procesamiento de PDFs usando Docling 2.64.0+
+- Puerto: 8000
+- Características:
+  - Modelo Heron más rápido por defecto
+  - Límites configurables de tamaño y páginas
+  - Descarga automática de modelos (primera vez puede tardar varios minutos)
+- Volúmenes montados:
+  - `uploads/` → `/app/uploads` (solo lectura): Acceso a PDFs subidos
+  - `.cache/huggingface/` → `/root/.cache/huggingface`: Cache de modelos descargados
+- **⚠️ Importante**: Si el contenedor fue creado sin los volúmenes montados, recrea el contenedor con `npm run docker:docling:recreate`
+
+#### Utilidades adicionales
+
+**Recrear contenedor Docling (si necesitas volver a montar volúmenes):**
 ```bash
-docker ps | grep -E "qdrant|redis"
+npm run docker:docling:recreate
 ```
 
-### 6. Levantar el backend Node.js
+**Remover colección Qdrant (limpiar datos vectoriales):**
+```bash
+rm -rf qdrant_data/collections/*
+```
+
+### 4. Levantar el backend Node.js
 
 #### En modo desarrollo (con recarga automática)
-
 ```bash
 cd /Users/luis/Desktop/vector-database-rag
 npm run dev
 ```
 
-#### En modo producción simple
-
+#### En modo producción
 ```bash
 cd /Users/luis/Desktop/vector-database-rag
 npm start
@@ -178,114 +194,68 @@ npm start
 
 El servidor se levanta por defecto en `http://localhost:3000`.
 
-### 7. Flujo de uso del RAG
+### 5. Flujo de uso del RAG
 
-1. Abrir la página para gestionar PDFs:
+1. **Gestionar PDFs**:
    - Navega a: `http://localhost:3000/pdfs.html`
    - Sube un PDF, luego pulsa:
-     - **“Convertir a chunks”** para procesarlo.
-     - **“Enviar a Qdrant”** para generar embeddings e indexar en Qdrant.
+     - **"Convertir a chunks"** para procesarlo.
+     - **"Enviar a Qdrant"** para generar embeddings e indexar en Qdrant.
 
-2. Abrir la página para hacer preguntas a los PDFs:
+2. **Hacer preguntas a los PDFs**:
    - Navega a: `http://localhost:3000/rag.html`
    - Selecciona un PDF con estado `processed`.
-   - Escribe tu pregunta y pulsa **“Preguntar al PDF”**.
+   - Escribe tu pregunta y pulsa **"Preguntar al PDF"**.
 
-### 8. Detener los servicios
+### 6. Detener los servicios
 
 #### Detener el backend Node.js
-
 - Si lo iniciaste con `npm run dev` o `npm start` en una terminal:
   - Ve a esa terminal y pulsa `Ctrl + C`.
 
-#### Detener Qdrant en Docker
-
-Si levantaste Qdrant con:
-
+#### Detener todos los servicios Docker
 ```bash
-docker run -p 6333:6333 \
-  -v "$(pwd)/qdrant_data:/qdrant/storage" \
-  qdrant/qdrant
+npm run docker:down && docker stop mongo-rag
 ```
 
-Ese contenedor queda en primer plano en la terminal; para detenerlo:
+#### Detener servicios Docker individuales
 
-- En esa terminal, pulsa `Ctrl + C`.
-
-Si lo dejaste en segundo plano con `-d` y le pusiste nombre, por ejemplo:
-
+**Qdrant:**
 ```bash
-docker run -d --name qdrant-rag \
-  -p 6333:6333 \
-  -v "$(pwd)/qdrant_data:/qdrant/storage" \
-  qdrant/qdrant
+docker stop qdrant-rag
 ```
 
-Entonces puedes detenerlo con:
-
-```bash
-docker stop qdrant
-```
-
-Y, si quieres borrarlo:
-
-```bash
-docker rm qdrant-rag
-```
-
-#### Detener MongoDB en Docker
-
-Si levantaste Mongo con el comando de ejemplo:
-
-```bash
-docker run -d \
-  --name mongo-rag \
-  -p 27017:27017 \
-  mongo:7
-```
-
-Para detenerlo:
-
+**MongoDB:**
 ```bash
 docker stop mongo-rag
 ```
 
-Y para borrarlo:
-
-```bash
-docker rm mongo-rag
-```
-
-#### Detener Redis en Docker
-
-Si levantaste Redis con el comando de ejemplo:
-
-```bash
-docker run -d \
-  --name redis-rag \
-  -p 6379:6379 \
-  redis:7-alpine
-```
-
-Para detenerlo:
-
+**Redis:**
 ```bash
 docker stop redis-rag
 ```
 
-Y para borrarlo:
-
+**Docling:**
 ```bash
-docker rm redis-rag
+docker stop docling-rag
 ```
 
-Si el contenedor está parado y quieres iniciarlo de nuevo:
+#### Eliminar contenedores Docker (si necesitas recrearlos)
 
+**Eliminar todos:**
 ```bash
-docker start redis-rag
+docker rm -f mongo-rag redis-rag docling-rag qdrant-rag
 ```
 
-### 9. Dashboard de Métricas
+**Eliminar individuales:**
+```bash
+docker rm -f mongo-rag    # MongoDB
+docker rm -f redis-rag    # Redis
+docker rm -f docling-rag  # Docling
+docker rm -f qdrant-rag   # Qdrant
+```
+
+### 7. Dashboard de Métricas
 
 El proyecto incluye un dashboard de métricas para monitorear el consumo de memoria, CPU, y estado de las conexiones en tiempo real.
 
@@ -365,5 +335,3 @@ CHUNK_LIST_MAX_LIMIT=500    # Por defecto: 500
 - `GET /api/metrics/export?format=json|csv` - Exportar métricas en formato JSON o CSV
 
 **Nota**: Todos los endpoints requieren autenticación JWT.
-
-
