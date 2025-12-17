@@ -98,9 +98,8 @@ npm install
 
 - **DESARROLLO (MongoDB Atlas)**: El contenedor usa `DB_URL` de tu archivo `.env`. Asegúrate de que tu `.env` tenga:
   ```bash
-  DB_URL="mongodb+srv://user:password@cluster.mongodb.net/NOMBRE_DE_LA_BASE_DE_DATOS?retryWrites=true&w=majority"
+  DB_URL="url_de_tu_base_de_datos"
   ```
-  ⚠️ **IMPORTANTE**: Incluye el nombre de la base de datos en la URL (antes del `?`). Ejemplo: `...mongodb.net/vector-db-rag?retryWrites...`
 
 - **PRODUCCIÓN (MongoDB del contenedor)**: Para usar el MongoDB del contenedor, edita `docker-compose.yml` y cambia la línea `DB_URL` en el servicio `app` a:
   ```yaml
