@@ -33,26 +33,13 @@ Usuario hace clic en "Convertir a chunks"
          ├─→ ProcessDocUseCase
          │     │
          │     ├─→ Verifica que documento existe
-         │     │
-         │     ├─→ pdfProcessService.processPdf()
-         │     │     │
-         │     │     └─→ Worker Pool (Piscina)
-         │     │           │
-         │     │           └─→ doc-processor.worker.js
-         │     │                 │
-         │     │                 ├─→ DoclingDocProcessorWrapper
-         │     │                 │     │
-         │     │                 │     └─→ HTTP Request → Docling Service (Docker)
-         │     │                 │           │
-         │     │                 │           └─→ processor.py
-         │     │                 │                 │
-         │     │                 │                 ├─→ DocumentConverter.convert()
-         │     │                 │                 │     │
-         │     │                 │                 │     ├─→ Si es PDF → Extrae texto, TOC, metadata
-         │     │                 │                 │     ├─→ Si es XLSX → Convierte a markdown (tablas)
-         │     │                 │                 │     └─→ Si es imagen → OCR
-         │     │                 │                 │
-         │     │                 │                 └─→ Retorna: cleaned_text, markdown, toc, metadata
+        │     │
+        │     ├─→ pdfProcessService.processPdf()
+        │     │     │
+        │     │     └─→ DocProcessService (Node)
+        │     │           │
+        │     │           ├─→ Si es PDF → pdf-parse → texto plano + chunks
+        │     │           └─→ Si es XLSX → excel_loader → filas → chunks con metadata
          │     │                 │
          │     │                 ├─→ cleanText() → Limpia texto preservando tablas
          │     │                 │
@@ -210,24 +197,18 @@ Archivo subido
   │     │
   │     ├─→ PDF
   │     │     │
-  │     │     └─→ Docling procesa:
-  │     │           ├─→ Extrae texto plano
-  │     │           ├─→ Detecta TOC (índice)
-  │     │           ├─→ Preserva estructura de páginas
-  │     │           └─→ Genera markdown con formato
+  │     │     └─→ DocProcessService (Node):
+  │     │           ├─→ Extrae texto plano con pdf-parse
+  │     │           └─→ Genera chunks de texto (createChunks)
   │     │
   │     └─→ XLSX
   │           │
-  │           └─→ Docling procesa:
-  │                 ├─→ Convierte tablas a markdown
-  │                 ├─→ Preserva estructura de filas/columnas
-  │                 └─→ Genera formato: | Columna1 | Columna2 |
+  │           └─→ excel_loader (Node):
+  │                 ├─→ Lee hojas/filas con exceljs
+  │                 ├─→ Convierte filas en texto estructurado
+  │                 └─→ Genera chunks por fila con metadata (sheetName, rowIndex)
   │
-  └─→ Ambos → createChunks()
-        │
-        ├─→ PDF → Chunks de texto normal
-        │
-        └─→ XLSX → Chunks preservan filas de tabla completas
+  └─→ Ambos → Chunks normalizados → MongoDB → Qdrant
 ```
 
 ### Consulta RAG
@@ -319,7 +300,7 @@ Datos almacenados en:
 
 2. PROCESAMIENTO
    Usuario → Frontend → POST /api/pdf/process/:id → ProcessDocUseCase
-   → Worker Pool → Docling Service → Extrae texto/tablas
+   → DocProcessService (Node) → pdf-parse / excel_loader → Extrae texto/filas
    → Crea chunks → MongoDB (estado: "processed")
    → (Opcional) Embed chunks → Qdrant (vectores)
 

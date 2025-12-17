@@ -27,18 +27,6 @@ services:
     networks:
       - vector-rag-network
 
-  docling-rag:
-    build:
-      context: ./services/docling-pdf-processor
-    container_name: docling-rag
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./uploads:/app/uploads:ro
-      - ./.cache/huggingface:/root/.cache/huggingface
-    networks:
-      - vector-rag-network
-
   app:
     build: .
     container_name: vector-rag-app
@@ -57,17 +45,15 @@ services:
       # Servicios dentro de Docker (usar nombres de servicio)
       QDRANT_URL: http://qdrant-rag:6333
       REDIS_URL: redis://redis-rag:6379
-      DOCLING_SERVICE_URL: http://docling-rag:8000
       # URL del segundo backend de campañas (configurar en .env o aquí)
       # Por defecto usa http://api:3000 (nombre del servicio en docker-compose)
       CAMPAIGN_SERVICE_URL: ${CAMPAIGN_SERVICE_URL:-http://api:3000}
     volumes:
-      - ./uploads:/app/uploads  # Compartir carpeta uploads con host y docling-rag
+      - ./uploads:/app/uploads  # Compartir carpeta uploads con host
     depends_on:
       - mongo-rag
       - redis-rag
       - qdrant-rag
-      - docling-rag
     networks:
       vector-rag-network:
         aliases:

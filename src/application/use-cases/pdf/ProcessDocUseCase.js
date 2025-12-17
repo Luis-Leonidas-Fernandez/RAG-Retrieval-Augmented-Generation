@@ -41,10 +41,13 @@ export class ProcessDocUseCase {
       throw new Error("Documento no tiene ruta de archivo válida");
     }
 
-    // Procesar documento usando el servicio (worker pool)
-    console.log(`[ProcessDocUseCase] Procesando documento con pdfProcessService - path: ${pdf.path}`);
+    // Procesar documento usando el servicio (ahora 100 % Node: PDF/Excel)
+    console.log(`[ProcessDocUseCase] Procesando documento con pdfProcessService - path: ${pdf.path}, mimetype: ${pdf.mimetype}`);
     const startTime = Date.now();
-    const result = await this.pdfProcessService.processPdf(pdf.path);
+    const result = await this.pdfProcessService.processPdf(pdf.path, {
+      mimetype: pdf.mimetype,
+      originalName: pdf.originalName,
+    });
     const processingTime = Date.now() - startTime;
     console.log(`[ProcessDocUseCase] Procesamiento completado en ${processingTime}ms`);
 

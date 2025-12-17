@@ -25,13 +25,6 @@ CACHE_ENABLED=true
 CACHE_TTL_EMBEDDING=604800
 CACHE_TTL_RAG_RESPONSE=86400
 
-# Microservicio Docling para procesamiento de PDFs (versión 2.64.0+)
-DOCLING_SERVICE_URL="http://localhost:8000"
-DOCLING_SERVICE_TIMEOUT=600000
-DOCLING_MAX_NUM_PAGES=500
-DOCLING_MAX_FILE_SIZE_BYTES=52428800
-DOCLING_CONTAINER_UPLOADS_PATH="/app/uploads"
-
 # Optimización de Memoria
 PDF_MAX_FILE_SIZE_MB=50
 PDF_BATCH_SIZE=100
@@ -67,10 +60,6 @@ ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173"
 - `EMBEDDING_MAX_TEXTS`: Límite máximo de textos a procesar en una sola llamada a embedBatch. Por defecto 200.
 - `RAG_MAX_CONTEXT_LENGTH`: Longitud máxima del contexto en caracteres para respuestas RAG. Por defecto 4000.
 - `RAG_SCORE_THRESHOLD`: Umbral mínimo de similitud (score) para considerar un chunk como relevante en búsquedas RAG. Valor entre 0.0 y 1.0. Por defecto 0.3. Valores más bajos (0.25-0.35) traen más resultados pero pueden incluir ruido. Valores más altos (0.4-0.6) son más estrictos pero pueden perder resultados relevantes. Para solicitudes de índice se usa automáticamente 0.3.
-- `DOCLING_MAX_NUM_PAGES`: Límite máximo de páginas que Docling procesará por PDF. Por defecto 500 páginas.
-- `DOCLING_MAX_FILE_SIZE_BYTES`: Límite máximo de tamaño de archivo en bytes para Docling. Por defecto 52428800 (50MB). Si no se define, se calcula automáticamente basado en `PDF_MAX_FILE_SIZE_MB`.
-- `DOCLING_CONTAINER_UPLOADS_PATH`: Ruta dentro del contenedor Docker donde se monta el directorio uploads. Por defecto `/app/uploads`. Solo cambiar si modificaste el volumen en Docker.
-- `DOCLING_SERVICE_TIMEOUT`: Timeout en milisegundos para las peticiones al servicio Docling. Por defecto 600000 (10 minutos). Para PDFs grandes o procesamiento lento, puede ser necesario aumentar este valor.
 
 **Recomendaciones según recursos del servidor**:
 - **Servidores pequeños (2GB RAM)**: Reduce `PDF_BATCH_SIZE=50`, `QDRANT_BATCH_SIZE=25`, `PDF_WORKER_THREADS=1`
@@ -107,7 +96,7 @@ npm install
   ```
   O define `DB_URL` en el `.env` con la URL del MongoDB de producción.
 
-- **Levantar todos los servicios (Mongo, Redis, Qdrant, Docling y backend Node) con una sola línea:**
+- **Levantar todos los servicios (Mongo, Redis, Qdrant y backend Node) con una sola línea:**
   ```bash
   cd /Users/luis/Desktop/vector-database-rag
   docker compose up -d
@@ -120,14 +109,14 @@ npm install
   docker compose up -d
   ```
 
-- **Detener y eliminar contenedores definidos en `docker-compose.yml`:**
+-- **Detener y eliminar contenedores definidos en `docker-compose.yml`:**
   ```bash
   docker compose down
   ```
 
-- **Verificar estado de todos los contenedores del stack:**
+-- **Verificar estado de todos los contenedores del stack:**
   ```bash
-  docker ps | grep -E "qdrant-rag|redis-rag|docling-rag|mongo-rag|vector-rag-app"
+  docker ps | grep -E "qdrant-rag|redis-rag|mongo-rag|vector-rag-app"
   ```
 
 - **Flujo recomendado:**
@@ -156,24 +145,7 @@ npm install
 - Si no levantas Redis, la aplicación funcionará en modo degradado (sin caché)
 - Si usas otra URL, actualiza `REDIS_URL` en tu `.env`
 
-**Docling** (obligatorio para PDFs):
-- Microservicio para procesamiento de PDFs usando Docling 2.64.0+
-- Puerto: 8000
-- Características:
-  - Modelo Heron más rápido por defecto
-  - Límites configurables de tamaño y páginas
-  - Descarga automática de modelos (primera vez puede tardar varios minutos)
-- Volúmenes montados:
-  - `uploads/` → `/app/uploads` (solo lectura): Acceso a PDFs subidos
-  - `.cache/huggingface/` → `/root/.cache/huggingface`: Cache de modelos descargados
-- **⚠️ Importante**: Si el contenedor fue creado sin los volúmenes montados, recrea el contenedor con `npm run docker:docling:recreate`
-
 #### Utilidades adicionales
-
-**Recrear contenedor Docling (si necesitas volver a montar volúmenes):**
-```bash
-npm run docker:docling:recreate
-```
 
 **Remover colección Qdrant (limpiar datos vectoriales):**
 ```bash
@@ -237,23 +209,17 @@ docker stop mongo-rag
 docker stop redis-rag
 ```
 
-**Docling:**
-```bash
-docker stop docling-rag
-```
-
 #### Eliminar contenedores Docker (si necesitas recrearlos)
 
 **Eliminar todos:**
 ```bash
-docker rm -f mongo-rag redis-rag docling-rag qdrant-rag
+docker rm -f mongo-rag redis-rag qdrant-rag
 ```
 
 **Eliminar individuales:**
 ```bash
 docker rm -f mongo-rag    # MongoDB
 docker rm -f redis-rag    # Redis
-docker rm -f docling-rag  # Docling
 docker rm -f qdrant-rag   # Qdrant
 ```
 
