@@ -9,6 +9,8 @@ import sessionRoutes from "./session.routes.js";
 import conversationRoutes from "./conversation.routes.js";
 import privacyRoutes from "./privacy.routes.js";
 import adminPrivacyRoutes from "./admin-privacy.routes.js";
+import segmentRoutes from "./segment.routes.js";
+import campaignRoutes from "./campaign.routes.js";
 
 const router = Router();
 
@@ -23,5 +25,7 @@ router.use("/sessions", sessionRoutes);
 router.use("/conversations", conversationRoutes);
 router.use("/privacy", privacyRoutes);
 router.use("/admin/privacy", adminPrivacyRoutes);
+router.use("/segments", segmentRoutes);
+router.use("/campaigns", campaignRoutes);
 export default router;
 

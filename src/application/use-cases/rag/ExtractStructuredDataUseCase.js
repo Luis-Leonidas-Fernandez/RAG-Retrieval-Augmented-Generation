@@ -34,51 +34,119 @@ export class ExtractStructuredDataUseCase {
       return [];
     }
 
-    // Extraer datos estructurados de todos los chunks
     const structuredData = [];
 
-    for (const chunk of chunks) {
-      if (!chunk.content || typeof chunk.content !== "string") {
-        continue;
-      }
+    // 1) Intentar primero parsear la tabla completa uniendo todos los chunks (4 columnas)
+    const fullText = chunks
+      .filter((chunk) => chunk.content && typeof chunk.content === "string")
+      .map((chunk) => chunk.content)
+      .join("\n");
 
-      // Intentar extraer tripletes nombre-email-vehículo primero (más completo)
-      const triplets = extractNameEmailVehiclePairs(chunk.content);
-      if (triplets && triplets.length > 0) {
-        // Agregar todas las ocurrencias encontradas
-        for (const triplet of triplets) {
-          structuredData.push({
-            name: triplet.name,
-            email: triplet.email,
-            vehicle: triplet.vehicle || "",
-          });
+    if (fullText) {
+      // Filas tipo: | CLIENTE | EMAIL | COMPRO_VEHICULO | TELEFONO |
+      const rowRegex =
+        /^\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$/gm;
+      let match;
+
+      while ((match = rowRegex.exec(fullText)) !== null) {
+        const col1 = match[1].trim(); // CLIENTE / NOMBRE
+        const col2 = match[2].trim(); // EMAIL
+        const col3 = match[3].trim(); // COMPRO_VEHICULO
+        const col4 = match[4].trim(); // TELEFONO
+
+        // Saltar cabecera
+        const isHeaderRow =
+          col1 &&
+          col2 &&
+          ["cliente", "nombre", "name"].includes(col1.toLowerCase()) &&
+          [
+            "email",
+            "correo",
+            "correo electrónico",
+            "correo electronico",
+          ].includes(col2.toLowerCase());
+
+        if (isHeaderRow) {
+          continue;
         }
-      } else {
-        // Si no hay tripletes, intentar extraer pares nombre-email
-        const pairs = extractNameEmailPairs(chunk.content);
-        if (pairs && pairs.length > 0) {
-          for (const pair of pairs) {
+
+        // El segundo campo debe parecer un email real
+        const looksLikeEmail = col2.includes("@") && col2.includes(".");
+        if (!looksLikeEmail) {
+          continue;
+        }
+
+        structuredData.push({
+          name: col1,
+          email: col2,
+          vehicle: col3,
+          phone: col4,
+        });
+
+        if (structuredData.length >= this.maxRows) {
+          console.log(
+            `[ExtractStructuredData] Límite máximo alcanzado (${this.maxRows} registros) en parser de 4 columnas, truncando resultados`
+          );
+          break;
+        }
+      }
+    }
+
+    // 2) Fallback al comportamiento anterior si no se encontró nada con el parser de 4 columnas
+    if (structuredData.length === 0) {
+      console.log(
+        "[ExtractStructuredData] Parser de 4 columnas no encontró registros, usando extracción por chunk (tripletes y pares)"
+      );
+
+      for (const chunk of chunks) {
+        if (!chunk.content || typeof chunk.content !== "string") {
+          continue;
+        }
+
+        // Intentar extraer tripletes nombre-email-vehículo primero (más completo)
+        const triplets = extractNameEmailVehiclePairs(chunk.content);
+        if (triplets && triplets.length > 0) {
+          // Agregar todas las ocurrencias encontradas
+          for (const triplet of triplets) {
             structuredData.push({
-              name: pair.name,
-              email: pair.email,
+              name: triplet.name,
+              email: triplet.email,
+              vehicle: triplet.vehicle || "",
+              phone: triplet.phone || "",
             });
           }
+        } else {
+          // Si no hay tripletes, intentar extraer pares nombre-email
+          const pairs = extractNameEmailPairs(chunk.content);
+          if (pairs && pairs.length > 0) {
+            for (const pair of pairs) {
+              structuredData.push({
+                name: pair.name,
+                email: pair.email,
+                vehicle: "",
+                phone: "",
+              });
+            }
+          }
         }
-      }
 
-      // Verificar si se alcanzó el límite máximo
-      if (structuredData.length >= this.maxRows) {
-        console.log(`[ExtractStructuredData] Límite máximo alcanzado (${this.maxRows} registros), truncando resultados`);
-        break;
+        // Verificar si se alcanzó el límite máximo
+        if (structuredData.length >= this.maxRows) {
+          console.log(
+            `[ExtractStructuredData] Límite máximo alcanzado (${this.maxRows} registros) en extracción por chunk, truncando resultados`
+          );
+          break;
+        }
       }
     }
 
     // Truncar si excede el límite
     const finalData = structuredData.slice(0, this.maxRows);
 
-    console.log(`[ExtractStructuredData] Extracción completada: ${finalData.length} registros encontrados`);
+    console.log(
+      `[ExtractStructuredData] Extracción completada: ${finalData.length} registros encontrados`
+    );
 
-    // Retornar TODAS las ocurrencias, sin filtrar duplicados
     return finalData;
   }
 }

@@ -428,6 +428,20 @@
           </div>
 
           <div class="form-group">
+            <label for="registerBusinessName">Nombre del negocio</label>
+            <input 
+              type="text" 
+              id="registerBusinessName" 
+              name="businessName" 
+              placeholder="Ej: Ford, Luigui, Herrería Javier"
+              autocomplete="organization"
+              minlength="1"
+              maxlength="100"
+            />
+            <div class="error-message" id="registerBusinessNameError"></div>
+          </div>
+
+          <div class="form-group">
             <label for="registerEmail">Email</label>
             <input 
               type="email" 
@@ -673,14 +687,23 @@
       event.preventDefault();
       clearErrors('login');
 
+      console.log('[LOGIN.HTML] 🚀 Iniciando proceso de login desde formulario');
+
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
-      const tenantSlug = document.getElementById('loginTenantSlug').value.trim() || "default";
+      const tenantSlugInput = document.getElementById('loginTenantSlug').value.trim();
+      const tenantSlug = tenantSlugInput || "default";
       const btn = document.getElementById('loginBtn');
       const errorDiv = document.getElementById('loginError');
 
+      console.log('[LOGIN.HTML] Datos del formulario:');
+      console.log('[LOGIN.HTML] - Email:', email);
+      console.log('[LOGIN.HTML] - TenantSlug (input):', tenantSlugInput || '(vacío)');
+      console.log('[LOGIN.HTML] - TenantSlug (final):', tenantSlug);
+
       // Validación básica
       if (!email || !password) {
+        console.warn('[LOGIN.HTML] ⚠️ Validación fallida: campos vacíos');
         errorDiv.textContent = 'Por favor completa todos los campos';
         errorDiv.classList.add('show');
         return;
@@ -689,28 +712,35 @@
       // Validar email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
+        console.warn('[LOGIN.HTML] ⚠️ Validación fallida: email inválido');
         document.getElementById('loginEmail').classList.add('error');
         document.getElementById('loginEmailError').textContent = 'Email inválido';
         document.getElementById('loginEmailError').classList.add('show');
         return;
       }
 
+      console.log('[LOGIN.HTML] ✅ Validaciones pasadas, llamando a login()');
       btn.disabled = true;
       btn.classList.add('loading');
 
       try {
         const result = await login(email, password, tenantSlug);
+        console.log('[LOGIN.HTML] Resultado de login():', result);
 
         if (result.success) {
+          console.log('[LOGIN.HTML] ✅ Login exitoso, redirigiendo a /pdfs.html');
           // Redirigir a PDFs
           window.location.href = '/pdfs.html';
         } else {
+          console.error('[LOGIN.HTML] ❌ Login fallido:', result.error);
           errorDiv.textContent = result.error || 'Error al iniciar sesión';
           errorDiv.classList.add('show');
           btn.disabled = false;
           btn.classList.remove('loading');
         }
       } catch (error) {
+        console.error('[LOGIN.HTML] ❌ Excepción en login:', error);
+        console.error('[LOGIN.HTML] Error stack:', error.stack);
         errorDiv.textContent = 'Error de conexión. Por favor intenta nuevamente.';
         errorDiv.classList.add('show');
         btn.disabled = false;
@@ -725,6 +755,7 @@
       clearErrors('register');
 
       const name = document.getElementById('registerName').value.trim();
+      const businessName = document.getElementById('registerBusinessName').value.trim();
       const email = document.getElementById('registerEmail').value.trim();
       const password = document.getElementById('registerPassword').value;
       const btn = document.getElementById('registerBtn');
@@ -766,7 +797,7 @@
       btn.classList.add('loading');
 
       try {
-        const result = await register(name, email, password);
+        const result = await register(name, email, password, businessName);
 
         if (result.success) {
           // Si requiere verificación, mostrar mensaje y NO redirigir

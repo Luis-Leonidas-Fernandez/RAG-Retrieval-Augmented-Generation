@@ -11,7 +11,10 @@
     "docker:up": "docker start qdrant-rag redis-rag docling-rag 2>/dev/null || (docker run -d --name qdrant-rag -p 6333:6333 -v \"$(pwd)/qdrant_data:/qdrant/storage\" qdrant/qdrant && docker run -d --name redis-rag -p 6379:6379 redis:7-alpine && (docker images -q docling-pdf-processor > /dev/null 2>&1 || docker build -q -t docling-pdf-processor ./services/docling-pdf-processor) && docker run -d --name docling-rag -p 8000:8000 -v \"$(pwd)/uploads:/app/uploads:ro\" -v \"$(pwd)/.cache/huggingface:/root/.cache/huggingface\" docling-pdf-processor)",
     "docker:down": "docker stop qdrant-rag redis-rag docling-rag",
     "docker:docling": "docker start docling-rag 2>/dev/null || ((docker images -q docling-pdf-processor > /dev/null 2>&1 || docker build -q -t docling-pdf-processor ./services/docling-pdf-processor) && docker run -d --name docling-rag -p 8000:8000 -v \"$(pwd)/uploads:/app/uploads:ro\" -v \"$(pwd)/.cache/huggingface:/root/.cache/huggingface\" docling-pdf-processor)",
-    "docker:docling:recreate": "docker rm -f docling-rag 2>/dev/null; docker build -q -t docling-pdf-processor ./services/docling-pdf-processor && docker run -d --name docling-rag -p 8000:8000 -v \"$(pwd)/uploads:/app/uploads:ro\" -v \"$(pwd)/.cache/huggingface:/root/.cache/huggingface\" docling-pdf-processor"
+    "docker:docling:recreate": "docker rm -f docling-rag 2>/dev/null; docker build -q -t docling-pdf-processor ./services/docling-pdf-processor && docker run -d --name docling-rag -p 8000:8000 -v \"$(pwd)/uploads:/app/uploads:ro\" -v \"$(pwd)/.cache/huggingface:/root/.cache/huggingface\" docling-pdf-processor",
+    "docker:network:create": "docker network create vector-rag-network 2>/dev/null || echo 'Red vector-rag-network ya existe'",
+    "docker:compose:up": "npm run docker:network:create && docker-compose up -d",
+    "docker:compose:down": "docker-compose down"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -22,6 +25,7 @@
   "dependencies": {
     "@qdrant/js-client-rest": "^1.16.0",
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.5.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",

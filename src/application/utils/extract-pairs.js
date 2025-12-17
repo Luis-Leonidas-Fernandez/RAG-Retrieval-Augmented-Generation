@@ -54,8 +54,13 @@ const TRIPLE_REGEX = /\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|/g;
 
 /**
  * Extrae tripletes nombre-email-vehículo del contenido del chunk
- * Busca formato de tabla: | Nombre | Email | Vehículo |
- * 
+ * Busca formato de tabla tipo: | CLIENTE | EMAIL | COMPRO_VEHICULO | TELEFONO |
+ *
+ * NOTA: Para evitar filas desordenadas cuando hay más de 3 columnas,
+ * filtramos explícitamente:
+ *  - Saltamos la fila de cabecera (CLIENTE | EMAIL | ...)
+ *  - Exigimos que el segundo campo "parezca" un email real (contenga @ y .)
+ *
  * @param {string} text - Texto del chunk donde buscar tripletes
  * @returns {Array<{name: string, email: string, vehicle: string, normalized: {name: string, vehicle: string}}>} Array de tripletes encontrados
  */
@@ -63,19 +68,38 @@ export function extractNameEmailVehiclePairs(text) {
   if (!text || typeof text !== "string") {
     return [];
   }
-  
+
   const results = [];
   let match;
-  
+
   // Reiniciar el regex para múltiples búsquedas
   TRIPLE_REGEX.lastIndex = 0;
-  
+
   while ((match = TRIPLE_REGEX.exec(text)) !== null) {
     const name = match[1].trim();
     const email = match[2].trim();
     const vehicle = match[3].trim();
-    
-    // Validar que al menos nombre y email tengan contenido
+
+    // 1) Saltar la fila de cabecera tipo: | CLIENTE | EMAIL | COMPRO_VEHICULO |
+    const isHeaderRow =
+      name &&
+      email &&
+      ["cliente", "nombre", "name"].includes(name.toLowerCase()) &&
+      ["email", "correo", "correo electrónico", "correo electronico"].includes(
+        email.toLowerCase()
+      );
+
+    if (isHeaderRow) {
+      continue;
+    }
+
+    // 2) El segundo campo DEBE parecer un email real
+    const looksLikeEmail = email.includes("@") && email.includes(".");
+    if (!looksLikeEmail) {
+      continue;
+    }
+
+    // 3) Validación final: nombre + email válidos
     if (name && email) {
       results.push({
         name,
@@ -88,7 +112,7 @@ export function extractNameEmailVehiclePairs(text) {
       });
     }
   }
-  
+
   return results;
 }
 

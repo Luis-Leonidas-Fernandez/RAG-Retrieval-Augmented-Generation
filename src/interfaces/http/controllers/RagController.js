@@ -277,6 +277,12 @@ export class RagController {
         responseData.exportId = ragQueryResponse.exportId || null;
       }
 
+      // Incluir candidato de segmento si el caso de uso lo generó
+      // (por ejemplo, clientes con nombres repetidos en documentos tabulares)
+      if (ragQueryResponse.segmentCandidate) {
+        responseData.segmentCandidate = ragQueryResponse.segmentCandidate;
+      }
+
       return res.json(
         createResponse(true, "Consulta RAG procesada correctamente", responseData)
       );

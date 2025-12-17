@@ -25,23 +25,110 @@ export class UserRepositoryMongo extends IUserRepository {
 
   /**
    * Busca un usuario por ID
+   * Soporta dos firmas:
+   * - findById(id) - busca solo por ID
+   * - findById(tenantId, userId, options) - busca por tenantId y userId (multi-tenant seguro)
    */
-  async findById(id) {
-    const userDoc = await UserModel.findById(id);
+  async findById(...args) {
+    // Si recibe 1 argumento, busca solo por ID
+    if (args.length === 1) {
+      const [id] = args;
+      const userDoc = await UserModel.findById(id);
 
-    if (!userDoc) {
-      return null;
+      if (!userDoc) {
+        return null;
+      }
+
+      return this._toDomainEntity(userDoc);
     }
-
-    return this._toDomainEntity(userDoc);
+    
+    // Si recibe 2 o más argumentos, busca por tenantId y userId
+    if (args.length >= 2) {
+      const [tenantId, userId, options = {}] = args;
+      return await this.findByIdAndTenant(userId, tenantId, options);
+    }
+    
+    throw new Error('findById requiere al menos 1 argumento (id) o 2 argumentos (tenantId, userId)');
   }
 
   /**
    * Crea un nuevo usuario
    */
   async create(userData) {
-    const userDoc = await UserModel.create(userData);
-    return this._toDomainEntity(userDoc);
+    console.log('[USER_REPOSITORY] 📝 Creando usuario en MongoDB...');
+    console.log('[USER_REPOSITORY] Datos recibidos:', {
+      tenantId: userData.tenantId,
+      email: userData.email,
+      name: userData.name,
+      emailVerified: userData.emailVerified,
+      hasPassword: !!userData.password,
+      hasVerificationToken: !!userData.verificationToken,
+      hasVerificationTokenExpires: !!userData.verificationTokenExpires
+    });
+    console.log('[USER_REPOSITORY] Base de datos:', UserModel.db?.databaseName || 'desconocida');
+    console.log('[USER_REPOSITORY] Colección:', UserModel.collection?.name || 'desconocida');
+
+    try {
+      const userDoc = await UserModel.create(userData);
+      console.log('[USER_REPOSITORY] ✅ Usuario creado en MongoDB:');
+      console.log('[USER_REPOSITORY] - _id:', userDoc._id.toString());
+      console.log('[USER_REPOSITORY] - email:', userDoc.email);
+      console.log('[USER_REPOSITORY] - tenantId:', userDoc.tenantId.toString());
+      console.log('[USER_REPOSITORY] - name:', userDoc.name);
+      console.log('[USER_REPOSITORY] - emailVerified:', userDoc.emailVerified);
+      console.log('[USER_REPOSITORY] - role:', userDoc.role);
+
+      // Verificar que se guardó en MongoDB con retry (para manejar consistencia eventual)
+      console.log('[USER_REPOSITORY] 🔍 Verificando que el usuario se guardó en MongoDB...');
+      let verifyDoc = null;
+      const maxRetries = 3;
+      const retryDelays = [50, 100, 200]; // ms
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          // Usar .lean() para obtener objeto plano y evitar problemas de caché
+          verifyDoc = await UserModel.findById(userDoc._id).lean();
+          if (verifyDoc) {
+            console.log(`[USER_REPOSITORY] ✅ Verificación exitosa (intento ${attempt + 1}/${maxRetries})`);
+            console.log('[USER_REPOSITORY] - Verified _id:', verifyDoc._id.toString());
+            console.log('[USER_REPOSITORY] - Verified email:', verifyDoc.email);
+            console.log('[USER_REPOSITORY] - Verified tenantId:', verifyDoc.tenantId.toString());
+            break;
+          }
+        } catch (verifyError) {
+          console.warn(`[USER_REPOSITORY] ⚠️ Error en verificación (intento ${attempt + 1}/${maxRetries}):`, verifyError.message);
+        }
+        
+        // Si no se encontró y no es el último intento, esperar antes de reintentar
+        if (!verifyDoc && attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+        }
+      }
+      
+      if (!verifyDoc) {
+        console.warn('[USER_REPOSITORY] ⚠️ Usuario no encontrado en verificación inmediata (puede ser delay de consistencia)');
+        console.warn('[USER_REPOSITORY] El usuario fue creado exitosamente, pero la verificación no lo encontró después de varios intentos');
+        console.warn('[USER_REPOSITORY] Esto puede ser normal en MongoDB con réplicas. El usuario debería estar disponible en breve.');
+        // No lanzar error, el usuario fue creado exitosamente
+      }
+
+      return this._toDomainEntity(userDoc);
+    } catch (error) {
+      console.error('[USER_REPOSITORY] ❌ Error al crear usuario:', error);
+      console.error('[USER_REPOSITORY] Error name:', error.name);
+      console.error('[USER_REPOSITORY] Error code:', error.code);
+      console.error('[USER_REPOSITORY] Error message:', error.message);
+      if (error.errors) {
+        console.error('[USER_REPOSITORY] Validation errors:', Object.keys(error.errors));
+        Object.keys(error.errors).forEach(key => {
+          console.error(`[USER_REPOSITORY] - ${key}:`, error.errors[key].message);
+        });
+      }
+      if (error.stack) {
+        console.error('[USER_REPOSITORY] Error stack:', error.stack);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -251,12 +338,6 @@ export class UserRepositoryMongo extends IUserRepository {
     return this._toDomainEntity(userDoc);
   }
 
-  /**
-   * Busca un usuario por ID y tenantId (alias para findByIdAndTenant)
-   */
-  async findById(tenantId, userId, options = {}) {
-    return await this.findByIdAndTenant(userId, tenantId, options);
-  }
 
   /**
    * Convierte un documento Mongoose a entidad de dominio User

@@ -30,6 +30,23 @@ export class RagQueryResponse {
     this.totalRows = data.totalRows || 0; // Total de filas encontradas
     this.dataType = data.dataType || 'text';
     this.exportId = data.exportId || null;
+
+    /**
+     * Objeto opcional con la información necesaria para crear un segmento
+     * a partir de una respuesta RAG tabular (ej: clientes con nombres repetidos).
+     * Este objeto NO se usa internamente en el flujo actual, pero se expone
+     * hacia HTTP para que el frontend pueda crear segmentos.
+     *
+     * Estructura esperada:
+     * {
+     *   tenantId: string,
+     *   sourceDocId: string,
+     *   descripcionQuery: string,
+     *   canalesOrigen: string[],
+     *   clientes: [{ nombre, email, vehiculo, imageUrlPromo }]
+     * }
+     */
+    this.segmentCandidate = data.segmentCandidate || null;
   }
 }
 

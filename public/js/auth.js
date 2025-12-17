@@ -151,24 +151,43 @@ export async function fetchWithAuth(url, options = {}) {
  */
 export async function login(email, password, tenantSlug = "default") {
   try {
+    console.log('[AUTH.JS] 🔐 Iniciando proceso de login');
+    console.log('[AUTH.JS] Email:', email);
+    console.log('[AUTH.JS] TenantSlug recibido:', tenantSlug || '(vacío)');
+    
     // Normalizar tenantSlug a lowercase
     const normalizedTenantSlug = tenantSlug ? tenantSlug.toLowerCase().trim() : "default";
+    console.log('[AUTH.JS] TenantSlug normalizado:', normalizedTenantSlug);
+
+    const requestBody = { 
+      email, 
+      password,
+      tenantSlug: normalizedTenantSlug 
+    };
+    console.log('[AUTH.JS] Request body (sin password):', { 
+      email, 
+      tenantSlug: normalizedTenantSlug,
+      password: '***' 
+    });
 
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ 
-        email, 
-        password,
-        tenantSlug: normalizedTenantSlug 
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log('[AUTH.JS] Response status:', response.status);
+    console.log('[AUTH.JS] Response ok:', response.ok);
+
     const data = await response.json();
+    console.log('[AUTH.JS] Response data:', data);
 
     if (response.ok && data.ok && data.data) {
+      console.log('[AUTH.JS] ✅ Login exitoso');
+      console.log('[AUTH.JS] Usuario:', data.data.user?.email);
+      console.log('[AUTH.JS] TenantId del usuario:', data.data.user?.tenantId);
       setToken(data.data.token, data.data.user);
       return { 
         success: true, 
@@ -177,6 +196,9 @@ export async function login(email, password, tenantSlug = "default") {
         email: data.data?.email || email
       };
     } else {
+      console.error('[AUTH.JS] ❌ Login fallido');
+      console.error('[AUTH.JS] Error message:', data.message);
+      console.error('[AUTH.JS] Error completo:', data);
       return { 
         success: false, 
         error: data.message || 'Error al iniciar sesión',
@@ -185,7 +207,8 @@ export async function login(email, password, tenantSlug = "default") {
       };
     }
   } catch (error) {
-    console.error('Error en login:', error);
+    console.error('[AUTH.JS] ❌ Error de conexión en login:', error);
+    console.error('[AUTH.JS] Error stack:', error.stack);
     return { success: false, error: 'Error de conexión. Por favor intenta nuevamente.' };
   }
 }
@@ -193,8 +216,12 @@ export async function login(email, password, tenantSlug = "default") {
 /**
  * Registrar nuevo usuario
  */
-export async function register(name, email, password) {
+export async function register(name, email, password, businessName) {
   const requestBody = { name, email, password };
+
+  if (businessName && businessName.trim()) {
+    requestBody.businessName = businessName.trim();
+  }
 
   try {
     const response = await fetch('/api/auth/register', {

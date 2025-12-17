@@ -2,10 +2,11 @@
  * Entidad de dominio Tenant
  */
 export class Tenant {
-  constructor({ id, name, slug, settings }) {
+  constructor({ id, name, slug, brandName, settings }) {
     this.id = id;
     this.name = name;
     this.slug = slug;
+    this.brandName = brandName || null;
     this.settings = settings || {};
   }
 
@@ -17,6 +18,7 @@ export class Tenant {
       id: this.id,
       name: this.name,
       slug: this.slug,
+      brandName: this.brandName,
       settings: this.settings,
     };
   }

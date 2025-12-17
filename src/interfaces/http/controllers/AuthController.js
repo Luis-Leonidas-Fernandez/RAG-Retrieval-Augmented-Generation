@@ -100,11 +100,19 @@ export class AuthController {
    */
   async login(req, res) {
     try {
+      console.log('[AUTH_CONTROLLER] 📥 Request de login recibido');
+      console.log('[AUTH_CONTROLLER] Body recibido:', {
+        email: req.body.email,
+        tenantSlug: req.body.tenantSlug || '(vacío)',
+        password: '***'
+      });
+
       // Extraer datos del request
       const { email, password, tenantSlug } = req.body;
 
       // Validación básica (las validaciones detalladas están en el middleware)
       if (!email || !password) {
+        console.warn('[AUTH_CONTROLLER] ⚠️ Validación fallida: email o password faltantes');
         return res.status(400).json(
           createResponse(false, "Email y contraseña son requeridos")
         );
@@ -112,10 +120,12 @@ export class AuthController {
 
       // Crear DTO de request
       const loginRequest = new LoginRequest({ email, password, tenantSlug });
+      console.log('[AUTH_CONTROLLER] ✅ LoginRequest creado, ejecutando use case...');
 
       // Ejecutar use case
       const loginResponse = await this.loginUserUseCase.execute(loginRequest, req);
 
+      console.log('[AUTH_CONTROLLER] ✅ Login exitoso, respondiendo...');
       // Responder con éxito
       return res.json(
         createResponse(true, "Inicio de sesión exitoso", {
@@ -125,12 +135,18 @@ export class AuthController {
         })
       );
     } catch (error) {
+      console.error('[AUTH_CONTROLLER] ❌ Error en login:', error.message);
+      console.error('[AUTH_CONTROLLER] Error type:', error.constructor.name);
+      console.error('[AUTH_CONTROLLER] Error stack:', error.stack);
+
       // Manejar excepciones de dominio
       if (error instanceof InvalidCredentialsException) {
+        console.error('[AUTH_CONTROLLER] ❌ Credenciales inválidas');
         return res.status(401).json(createResponse(false, error.message));
       }
 
       if (error instanceof EmailNotVerifiedException) {
+        console.error('[AUTH_CONTROLLER] ❌ Email no verificado');
         return res.status(403).json(
           createResponse(false, error.message, {
             requiresVerification: true,
@@ -140,11 +156,13 @@ export class AuthController {
       }
 
       if (error instanceof TenantNotFoundException) {
+        console.error('[AUTH_CONTROLLER] ❌ Tenant no encontrado');
+        console.error('[AUTH_CONTROLLER] TenantSlug buscado:', req.body.tenantSlug || 'default');
         return res.status(400).json(createResponse(false, error.message));
       }
 
       // Error genérico
-      console.error("[AUTH] Error al iniciar sesión:", error);
+      console.error("[AUTH_CONTROLLER] ❌ Error genérico al iniciar sesión:", error);
       return res.status(500).json(
         createResponse(false, "Error interno del servidor al iniciar sesión")
       );
@@ -205,11 +223,21 @@ export class AuthController {
    */
   async register(req, res) {
     try {
+      console.log('[AUTH_CONTROLLER] 📥 Request de registro recibido');
+      console.log('[AUTH_CONTROLLER] Body recibido:', {
+        email: req.body.email,
+        name: req.body.name,
+        tenantSlug: req.body.tenantSlug || '(vacío)',
+        businessName: req.body.businessName || '(vacío)',
+        password: '***'
+      });
+
       // Extraer datos del request
-      const { email, password, name, tenantSlug } = req.body;
+      const { email, password, name, tenantSlug, businessName } = req.body;
 
       // Validación básica (las validaciones detalladas están en el middleware)
       if (!email || !password || !name) {
+        console.warn('[AUTH_CONTROLLER] ⚠️ Validación fallida: campos faltantes');
         return res.status(400).json(
           createResponse(false, "Email, contraseña y nombre son requeridos")
         );
@@ -221,12 +249,20 @@ export class AuthController {
         password,
         name,
         tenantSlug,
+        businessName,
       });
+      console.log('[AUTH_CONTROLLER] ✅ RegisterRequest creado, ejecutando use case...');
 
       // Ejecutar use case
       const registerResponse = await this.registerUserUseCase.execute(
         registerRequest
       );
+
+      console.log('[AUTH_CONTROLLER] ✅ Registro exitoso, usuario creado:');
+      console.log('[AUTH_CONTROLLER] - User ID:', registerResponse.user?.id);
+      console.log('[AUTH_CONTROLLER] - User Email:', registerResponse.user?.email);
+      console.log('[AUTH_CONTROLLER] - User TenantId:', registerResponse.user?.tenantId);
+      console.log('[AUTH_CONTROLLER] - Requires Verification:', registerResponse.requiresVerification);
 
       // Responder con éxito
       return res.status(201).json(
@@ -240,6 +276,11 @@ export class AuthController {
         )
       );
     } catch (error) {
+      console.error('[AUTH_CONTROLLER] ❌ Error en registro:', error.message);
+      console.error('[AUTH_CONTROLLER] Error type:', error.constructor.name);
+      if (error.stack) {
+        console.error('[AUTH_CONTROLLER] Error stack:', error.stack);
+      }
       // Manejar excepciones de dominio
       if (error instanceof EmailAlreadyExistsException) {
         return res.status(400).json(createResponse(false, error.message));

@@ -1,0 +1,81 @@
+version: "3.9"
+
+services:
+  mongo-rag:
+    image: mongo:7
+    container_name: mongo-rag
+    ports:
+      - "27017:27017"
+    networks:
+      - vector-rag-network
+
+  redis-rag:
+    image: redis:7-alpine
+    container_name: redis-rag
+    ports:
+      - "6380:6379"
+    networks:
+      - vector-rag-network
+
+  qdrant-rag:
+    image: qdrant/qdrant
+    container_name: qdrant-rag
+    ports:
+      - "6333:6333"
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    networks:
+      - vector-rag-network
+
+  docling-rag:
+    build:
+      context: ./services/docling-pdf-processor
+    container_name: docling-rag
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads:ro
+      - ./.cache/huggingface:/root/.cache/huggingface
+    networks:
+      - vector-rag-network
+
+  app:
+    build: .
+    container_name: vector-rag-app
+    ports:
+      - "3002:3000"
+    env_file:
+      - .env
+    environment:
+      # Puerto interno del contenedor (debe ser 3000 para que Docker mapee correctamente)
+      PORT: 3000
+      # DESARROLLO: Usa DB_URL del .env (MongoDB Atlas)
+      # Si DB_URL no está en .env, usa el MongoDB del contenedor como fallback
+      # PRODUCCIÓN: Cambia DB_URL aquí a mongodb://mongo-rag:27017/vector-db-rag
+      # o define DB_URL en el .env con la URL de producción
+      DB_URL: ${DB_URL:-mongodb://mongo-rag:27017/vector-db-rag}
+      # Servicios dentro de Docker (usar nombres de servicio)
+      QDRANT_URL: http://qdrant-rag:6333
+      REDIS_URL: redis://redis-rag:6379
+      DOCLING_SERVICE_URL: http://docling-rag:8000
+      # URL del segundo backend de campañas (configurar en .env o aquí)
+      # Por defecto usa http://api:3000 (nombre del servicio en docker-compose)
+      CAMPAIGN_SERVICE_URL: ${CAMPAIGN_SERVICE_URL:-http://api:3000}
+    volumes:
+      - ./uploads:/app/uploads  # Compartir carpeta uploads con host y docling-rag
+    depends_on:
+      - mongo-rag
+      - redis-rag
+      - qdrant-rag
+      - docling-rag
+    networks:
+      vector-rag-network:
+        aliases:
+          - vector-rag  # Alias para que el servicio de campañas pueda acceder con http://vector-rag:3000
+
+networks:
+  vector-rag-network:
+    name: vector-rag-network
+    driver: bridge
+
+

@@ -38,7 +38,7 @@ app.use(
 // 2. CORS configurado - Permitir solo orígenes específicos
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
-  : ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"];
+  : ["http://localhost:3002", "http://localhost:5173", "http://127.0.0.1:3002"];
 
 app.use(
   cors({

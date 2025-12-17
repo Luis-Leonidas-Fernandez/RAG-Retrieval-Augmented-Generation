@@ -20,7 +20,7 @@ BCRYPT_ROUNDS=10
 RATE_LIMIT_WINDOW_MS=60000
 
 # Caché Redis (opcional)
-REDIS_URL="redis://localhost:6379"
+REDIS_URL="redis://localhost:6380"
 CACHE_ENABLED=true
 CACHE_TTL_EMBEDDING=604800
 CACHE_TTL_RAG_RESPONSE=86400
@@ -92,49 +92,52 @@ npm install
 
 ### 3. Levantar servicios Docker
 
-#### Comandos rápidos (recomendado)
+#### 3.1 Docker Compose (recomendado)
 
-**Levantar todos los servicios (Qdrant, Redis, Docling y MongoDB) con una sola línea:**
-```bash
-npm run docker:up && docker run -d --name mongo-rag -p 27017:27017 mongo:7 || docker start mongo-rag
-```
+**Configuración de MongoDB (Desarrollo vs Producción):**
 
-**Detener todos los servicios con una sola línea:**
-```bash
-npm run docker:down && docker stop mongo-rag
-```
+- **DESARROLLO (MongoDB Atlas)**: El contenedor usa `DB_URL` de tu archivo `.env`. Asegúrate de que tu `.env` tenga:
+  ```bash
+  DB_URL="mongodb+srv://user:password@cluster.mongodb.net/NOMBRE_DE_LA_BASE_DE_DATOS?retryWrites=true&w=majority"
+  ```
+  ⚠️ **IMPORTANTE**: Incluye el nombre de la base de datos en la URL (antes del `?`). Ejemplo: `...mongodb.net/vector-db-rag?retryWrites...`
 
-**Verificar estado de todos los contenedores:**
-```bash
-docker ps | grep -E "qdrant|redis|docling-rag|mongo-rag"
-```
+- **PRODUCCIÓN (MongoDB del contenedor)**: Para usar el MongoDB del contenedor, edita `docker-compose.yml` y cambia la línea `DB_URL` en el servicio `app` a:
+  ```yaml
+  DB_URL: mongodb://mongo-rag:27017/vector-db-rag
+  ```
+  O define `DB_URL` en el `.env` con la URL del MongoDB de producción.
 
-**Iniciar contenedores existentes (si están parados):**
-```bash
-docker start mongo-rag redis-rag docling-rag qdrant-rag 2>/dev/null || npm run docker:up && docker run -d --name mongo-rag -p 27017:27017 mongo:7 || docker start mongo-rag
-```
+- **Levantar todos los servicios (Mongo, Redis, Qdrant, Docling y backend Node) con una sola línea:**
+  ```bash
+  cd /Users/luis/Desktop/vector-database-rag
+  docker compose up -d
+  ```
 
-#### Servicios individuales (si necesitas levantar uno específico)
+- **Reconstruir el contenedor después de cambios en el código:**
+  ```bash
+  docker compose down
+  docker compose build --no-cache app
+  docker compose up -d
+  ```
 
-**Qdrant (puerto 6333):**
-```bash
-docker run -d --name qdrant-rag -p 6333:6333 -v "$(pwd)/qdrant_data:/qdrant/storage" qdrant/qdrant
-```
+- **Detener y eliminar contenedores definidos en `docker-compose.yml`:**
+  ```bash
+  docker compose down
+  ```
 
-**MongoDB (puerto 27017):**
-```bash
-docker run -d --name mongo-rag -p 27017:27017 mongo:7
-```
+- **Verificar estado de todos los contenedores del stack:**
+  ```bash
+  docker ps | grep -E "qdrant-rag|redis-rag|docling-rag|mongo-rag|vector-rag-app"
+  ```
 
-**Redis (puerto 6379, opcional pero recomendado):**
-```bash
-docker run -d --name redis-rag -p 6379:6379 redis:7-alpine
-```
-
-**Docling (puerto 8000, obligatorio para procesar PDFs):**
-```bash
-npm run docker:docling
-```
+- **Flujo recomendado:**
+  - Desarrollo con backend en Docker:
+    - `docker compose up -d`
+    - Navegar a `http://localhost:3000`
+  - Alternativa (backend en host):
+    - `docker compose up -d` para infraestructura
+    - `npm run dev` para el backend en tu máquina
 
 #### Información sobre los servicios
 
@@ -335,3 +338,63 @@ CHUNK_LIST_MAX_LIMIT=500    # Por defecto: 500
 - `GET /api/metrics/export?format=json|csv` - Exportar métricas en formato JSON o CSV
 
 **Nota**: Todos los endpoints requieren autenticación JWT.
+
+---
+
+## Configuración del Servicio de Campañas (Segundo Backend)
+
+### Conectar el servicio `api` (ford-mailer-api) a la red Docker
+
+El servicio de campañas está en un proyecto separado. Para que ambos servicios se comuniquen correctamente dentro de Docker, el servicio `api` debe estar en la misma red Docker.
+
+#### En el docker-compose.yml del servicio de campañas (ford-mailer-api):
+
+Agrega la siguiente configuración:
+
+```yaml
+services:
+  api:
+    # ... tu configuración existente
+    container_name: ford-mailer-api
+    ports:
+      - "3001:3000"  # Host:3001 → Container:3000 (corregir mapeo)
+    networks:
+      - vector-rag-network  # Conectar a la misma red
+
+networks:
+  vector-rag-network:
+    external: true
+    name: vector-rag-network
+```
+
+#### Crear la red Docker (si no existe):
+
+```bash
+docker network create vector-rag-network
+```
+
+#### Verificar la conexión:
+
+1. Levanta ambos proyectos con `docker-compose up`
+2. Desde el contenedor `vector-rag-app`, deberías poder hacer ping al servicio `api`:
+   ```bash
+   docker exec -it vector-rag-app ping -c 2 api
+   ```
+
+#### Variables de entorno:
+
+**En este proyecto (vector-database-rag):**
+- No es necesario configurar `CAMPAIGN_SERVICE_URL` en el `.env` si ambos servicios están en la misma red
+- El valor por defecto `http://api:3000` funcionará correctamente
+
+**Si necesitas sobrescribir la URL** (por ejemplo, para desarrollo local fuera de Docker):
+```bash
+# En .env (solo si es necesario)
+CAMPAIGN_SERVICE_URL=http://host.docker.internal:3001
+```
+
+#### Notas importantes:
+
+- El servicio `api` debe escuchar en el puerto **3000** internamente (dentro del contenedor)
+- El mapeo de puertos debe ser `3001:3000` (puerto del host : puerto del contenedor)
+- Ambos servicios deben estar en la red `vector-rag-network` para comunicarse por nombre

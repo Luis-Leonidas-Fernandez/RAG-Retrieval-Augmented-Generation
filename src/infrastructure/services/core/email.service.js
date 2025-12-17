@@ -48,7 +48,7 @@ export async function sendVerificationEmail(email, name, verificationToken) {
     throw error;
   }
 
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3002";
   const verificationUrl = `${frontendUrl}/login.html?token=${verificationToken}`;
 
   console.log(`[Email] Intentando enviar email a ${email} desde ${fromEmail}`);
@@ -112,7 +112,7 @@ export async function sendPasswordResetEmail(email, name, resetToken) {
     throw error;
   }
 
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3002";
   const resetUrl = `${frontendUrl}/reset-password.html?token=${resetToken}`;
 
   console.log(`[Email] Intentando enviar email de reset de contraseña a ${email} desde ${fromEmail}`);

@@ -567,6 +567,170 @@
       border-radius: 6px;
     }
 
+    .segment-status-message {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Modal para subir imagen de segmento */
+    .segment-image-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1500;
+    }
+
+    .segment-image-modal-content {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      padding: 16px 18px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .segment-image-modal-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin: 0 0 8px;
+    }
+
+    .segment-image-modal-description {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0 0 10px;
+    }
+
+    .segment-image-input {
+      margin-top: 8px;
+      font-size: 12px;
+      width: 100%;
+    }
+
+    .segment-image-preview {
+      margin-top: 10px;
+      max-width: 100%;
+      border-radius: 12px;
+      display: none;
+    }
+
+    .segment-image-actions {
+      margin-top: 12px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .segment-image-status {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .channel-selector {
+      margin-top: 12px;
+      position: relative;
+      display: inline-block;
+    }
+
+    .channel-dropdown-btn {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.98));
+      color: var(--text-main);
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+    }
+
+    .channel-dropdown-btn:hover {
+      border-color: var(--accent);
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.26), rgba(15, 23, 42, 1));
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35), 0 10px 22px rgba(15, 23, 42, 0.9);
+      transform: translateY(-1px);
+    }
+
+    .channel-selector.open .channel-dropdown-btn {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.6), 0 14px 28px rgba(15, 23, 42, 0.95);
+    }
+
+    .channel-dropdown-caret {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .channel-dropdown-menu {
+      position: absolute;
+      top: 110%;
+      left: 0;
+      min-width: 180px;
+      background: rgba(15, 23, 42, 0.98);
+      border-radius: 10px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+      padding: 8px 10px;
+      z-index: 50;
+      display: none;
+    }
+
+    .channel-selector.open .channel-dropdown-menu {
+      display: block;
+    }
+
+    .channel-options {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+
+    .channel-option {
+      width: 100%;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-main);
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+
+    .channel-option:hover {
+      border-color: rgba(56, 189, 248, 0.5);
+      background: rgba(15, 23, 42, 1);
+    }
+
+    .channel-option.selected {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.18);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.5);
+    }
+
+    .channel-option-icon {
+      font-size: 14px;
+    }
+
+    .channel-selected-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
     .export-button {
       margin-top: 16px;
       padding: 10px 20px;
@@ -711,6 +875,82 @@
   <script>
     let pdfList = [];
     let selectedPdfId = null;
+    let currentSegmentCandidate = null; // Segmento sugerido por RAG (clientes con nombres repetidos)
+
+    const RAG_CACHE_KEY = 'rag_last_response_v1';
+
+    function saveLastRagResponse(pdfId, question, responseData) {
+      try {
+        const payload = {
+          pdfId,
+          question,
+          responseData,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(RAG_CACHE_KEY, JSON.stringify(payload));
+      } catch (e) {
+        console.warn('No se pudo guardar cache RAG:', e);
+      }
+    }
+
+    function loadLastRagResponse() {
+      try {
+        const raw = localStorage.getItem(RAG_CACHE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn('No se pudo leer cache RAG:', e);
+        return null;
+      }
+    }
+
+    function clearLastRagResponse() {
+      try {
+        localStorage.removeItem(RAG_CACHE_KEY);
+      } catch (e) {
+        console.warn('No se pudo limpiar cache RAG:', e);
+      }
+    }
+
+    function updateChannelsInCache(channels) {
+      try {
+        const cached = loadLastRagResponse();
+        if (!cached || !cached.responseData || !cached.responseData.segmentCandidate) {
+          return;
+        }
+        // Solo actualizar si corresponde al PDF seleccionado actualmente
+        if (cached.pdfId !== selectedPdfId) {
+          return;
+        }
+        cached.responseData.segmentCandidate.canalesOrigen = channels;
+        saveLastRagResponse(cached.pdfId, cached.question, cached.responseData);
+      } catch (e) {
+        console.warn('No se pudo actualizar canales en cache RAG:', e);
+      }
+    }
+
+    function updateSegmentImageInCache(imageUrlPromo) {
+      try {
+        const cached = loadLastRagResponse();
+        if (!cached || !cached.responseData || !cached.responseData.segmentCandidate) {
+          return;
+        }
+        if (cached.pdfId !== selectedPdfId) {
+          return;
+        }
+        const seg = cached.responseData.segmentCandidate;
+        seg.imageUrlPromo = imageUrlPromo;
+        // Mantener también un array de imágenes
+        let arr = Array.isArray(seg.imageUrlsPromo) ? seg.imageUrlsPromo : [];
+        if (!arr.includes(imageUrlPromo)) {
+          arr = [...arr, imageUrlPromo];
+        }
+        seg.imageUrlsPromo = arr;
+        saveLastRagResponse(cached.pdfId, cached.question, cached.responseData);
+      } catch (e) {
+        console.warn('No se pudo actualizar imagen en cache RAG:', e);
+      }
+    }
 
     async function loadPdfs() {
       const statusEl = document.getElementById("pdf-list-status");
@@ -835,6 +1075,16 @@
       // Limpiar el mensaje de estado
       if (statusEl) {
         statusEl.textContent = "";
+      }
+
+      // Intentar restaurar última respuesta RAG para este PDF desde cache
+      const cached = loadLastRagResponse();
+      if (cached && cached.pdfId === pdfId && cached.responseData) {
+        const statusCachedEl = document.getElementById("rag-status");
+        if (statusCachedEl) {
+          statusCachedEl.textContent = `Mostrando última respuesta guardada para este PDF (pregunta: "${cached.question}")`;
+        }
+        renderRagResponseFromData(cached.responseData);
       }
     }
 
@@ -980,7 +1230,24 @@
         }
       });
 
-      const columns = Array.from(allColumns).sort();
+      // Mantener el orden original: usar la primera fila como referencia
+      // y agregar cualquier columna adicional que aparezca en otras filas
+      let columns = [];
+      if (structuredData.length > 0 && structuredData[0] && typeof structuredData[0] === 'object') {
+        // Orden de la primera fila
+        const firstRowKeys = Object.keys(structuredData[0]);
+        columns = [...firstRowKeys];
+        
+        // Agregar columnas adicionales que no estén en la primera fila
+        allColumns.forEach(col => {
+          if (!columns.includes(col)) {
+            columns.push(col);
+          }
+        });
+      } else {
+        // Fallback: si no hay primera fila válida, usar orden alfabético
+        columns = Array.from(allColumns).sort();
+      }
 
       if (columns.length === 0) {
         return '';
@@ -1094,6 +1361,550 @@
       }
     }
 
+    /**
+     * Sube imagen de segmento a través del backend (Cloudinary)
+     * @param {File} file - Archivo de imagen seleccionado
+     * @returns {Promise<string>} URL segura de la imagen en Cloudinary
+     */
+    async function uploadSegmentImage(file) {
+      if (!file) {
+        throw new Error("No se seleccionó ninguna imagen.");
+      }
+
+      const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        throw new Error("La imagen excede el tamaño máximo permitido de 5MB.");
+      }
+
+      const token = localStorage.getItem('rag_auth_token');
+      if (!token) {
+        throw new Error("No hay token de autenticación.");
+      }
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await fetch("/api/segments/upload-image", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({
+        ok: false,
+        message: "Error al subir imagen (respuesta inválida del servidor).",
+      }));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "Error al subir imagen para segmento.");
+      }
+
+      const imageUrl = data.data?.imageUrl;
+      if (!imageUrl) {
+        throw new Error("El servidor no devolvió la URL de la imagen.");
+      }
+
+      return imageUrl;
+    }
+
+    /**
+     * Renderiza en la UI una respuesta RAG ya obtenida (sin llamar al backend)
+     * @param {Object} responseData - data.data de /api/rag/query
+     */
+    function renderRagResponseFromData(responseData) {
+      const resultsBox = document.getElementById("results");
+      const answerEl = document.getElementById("answer-text");
+      if (!resultsBox || !answerEl) return;
+
+      let fullAnswerHTML = formatMarkdownToHtml(responseData?.answer || "(sin respuesta)");
+
+      if (responseData?.structuredData && Array.isArray(responseData.structuredData) && responseData.structuredData.length > 0) {
+        const totalRows = responseData.totalRows || responseData.structuredData.length;
+        const tableHTML = renderStructuredData(responseData.structuredData, totalRows);
+        fullAnswerHTML += tableHTML;
+
+        if (responseData.exportId) {
+          const exportId = responseData.exportId;
+          fullAnswerHTML += `<button id="export-excel-btn" class="export-button" data-export-id="${exportId}">📥 Descargar Excel</button>`;
+        }
+      }
+
+      // Actualizar candidato de segmento si existe
+      currentSegmentCandidate = responseData.segmentCandidate || null;
+
+      if (currentSegmentCandidate) {
+        // Normalizar array de imágenes: si viene solo imageUrlPromo, crear un array con esa primera imagen
+        if (!Array.isArray(currentSegmentCandidate.imageUrlsPromo)) {
+          const firstImage = currentSegmentCandidate.imageUrlPromo && currentSegmentCandidate.imageUrlPromo.trim()
+            ? [currentSegmentCandidate.imageUrlPromo]
+            : [];
+          currentSegmentCandidate.imageUrlsPromo = firstImage;
+        }
+
+        // Normalizar canales de origen a etiquetas de UI ('Email', 'WhatsApp')
+        const rawChannels = Array.isArray(currentSegmentCandidate.canalesOrigen)
+          ? currentSegmentCandidate.canalesOrigen
+          : [];
+        const mapLabel = (value) => {
+          const normalized = (value || '').toString().toLowerCase();
+          if (normalized === 'email' || normalized === 'emails' || normalized === 'correo') return 'Email';
+          if (normalized === 'whatsapp' || normalized === 'wasap' || normalized === 'ws') return 'WhatsApp';
+          return value;
+        };
+        let uiChannels = rawChannels.map(mapLabel).filter(Boolean);
+        // Si no hay nada, default a Email
+        if (uiChannels.length === 0) {
+          uiChannels = ['Email'];
+        }
+        // Eliminar duplicados
+        uiChannels = Array.from(new Set(uiChannels));
+        currentSegmentCandidate.canalesOrigen = uiChannels;
+
+        fullAnswerHTML += `
+          <div class="channel-selector">
+            <button type="button" id="channel-dropdown-btn" class="channel-dropdown-btn">
+              <span>Canales</span>
+              <span class="channel-dropdown-caret">▾</span>
+            </button>
+            <div class="channel-dropdown-menu">
+              <div class="channel-options">
+                <button type="button" class="channel-option" data-channel="Email">
+                  <span class="channel-option-icon">📧</span>
+                  <span>Email</span>
+                </button>
+                <button type="button" class="channel-option" data-channel="WhatsApp">
+                  <span class="channel-option-icon">💬</span>
+                  <span>WhatsApp</span>
+                </button>
+              </div>
+              <div id="channel-selected-text" class="channel-selected-text"></div>
+            </div>
+          </div>
+          <button id="upload-segment-image-btn" class="export-button" style="margin-left: 8px; background: rgba(15,23,42,0.95); border-color: var(--accent-2);">
+            🖼️ Subir imagen
+          </button>
+          <button id="create-segment-btn" class="export-button" style="margin-left: 8px;">
+            ➕ Crear segmento
+          </button>
+          <button id="create-campaign-btn" class="export-button" style="margin-left: 8px; background: linear-gradient(135deg, var(--accent-2), var(--accent));">
+            🚀 Crear campaña
+          </button>
+          <div id="segment-status" class="segment-status-message"></div>
+          <div id="segment-image-modal" class="segment-image-modal">
+            <div class="segment-image-modal-content">
+              <h3 class="segment-image-modal-title">Subir imagen para el segmento</h3>
+              <p class="segment-image-modal-description">
+                Sube una imagen promocional (máx. 5MB) que se asociará a este segmento.
+              </p>
+              <input id="segment-image-input" class="segment-image-input" type="file" multiple accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" />
+              <img id="segment-image-preview" class="segment-image-preview" alt="Preview imagen segmento" />
+              <div class="segment-image-actions">
+                <button type="button" id="segment-image-cancel-btn">
+                  Cancelar
+                </button>
+                <button type="button" id="segment-image-upload-btn">
+                  Subir a Cloudinary
+                </button>
+              </div>
+              <div id="segment-image-status" class="segment-image-status"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      resultsBox.style.display = "block";
+      answerEl.innerHTML = fullAnswerHTML;
+
+      const exportBtn = document.getElementById('export-excel-btn');
+      if (exportBtn) {
+        const exportId = exportBtn.getAttribute('data-export-id');
+        exportBtn.addEventListener('click', () => downloadExcel(exportId));
+      }
+
+      // Configurar selector de canales si hay candidato de segmento
+      if (currentSegmentCandidate) {
+        const channelSelectorEl = document.querySelector('.channel-selector');
+        const dropdownBtn = document.getElementById('channel-dropdown-btn');
+        const dropdownMenu = channelSelectorEl ? channelSelectorEl.querySelector('.channel-dropdown-menu') : null;
+        const channelButtons = Array.from(document.querySelectorAll('.channel-option'));
+        const channelSelectedTextEl = document.getElementById('channel-selected-text');
+
+        // Usar copia local del array para manejar UI
+        let channels = Array.isArray(currentSegmentCandidate.canalesOrigen)
+          ? [...currentSegmentCandidate.canalesOrigen]
+          : [];
+
+        const normalize = (label) => (label || '').toString().toLowerCase();
+
+        const updateChannelUI = () => {
+          const setNorm = new Set(channels.map(normalize));
+          channelButtons.forEach((btn) => {
+            const label = btn.getAttribute('data-channel');
+            if (setNorm.has(normalize(label))) {
+              btn.classList.add('selected');
+            } else {
+              btn.classList.remove('selected');
+            }
+          });
+          if (channelSelectedTextEl) {
+            if (!channels.length) {
+              channelSelectedTextEl.textContent = 'Canales seleccionados: ninguno';
+            } else {
+              channelSelectedTextEl.textContent = 'Canales seleccionados: ' + channels.join(', ');
+            }
+          }
+        };
+
+        channelButtons.forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            // Evitar que el click en el item cierre inmediatamente el dropdown
+            e.stopPropagation();
+            const label = btn.getAttribute('data-channel');
+            const idx = channels.findIndex((c) => normalize(c) === normalize(label));
+            if (idx === -1) {
+              channels.push(label);
+            } else {
+              channels.splice(idx, 1);
+            }
+            // Actualizar estado global y cache
+            channels = Array.from(new Set(channels));
+            currentSegmentCandidate.canalesOrigen = channels;
+            updateChannelsInCache(channels);
+            updateChannelUI();
+          });
+        });
+
+        if (dropdownBtn && channelSelectorEl && dropdownMenu) {
+          dropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            channelSelectorEl.classList.toggle('open');
+          });
+
+          // Cerrar el dropdown solo cuando se hace click fuera del selector
+          document.addEventListener('click', (event) => {
+            if (!channelSelectorEl.contains(event.target)) {
+              channelSelectorEl.classList.remove('open');
+            }
+          });
+        }
+
+        // Inicializar UI con el estado actual
+        updateChannelUI();
+      }
+
+      const createSegmentBtn = document.getElementById('create-segment-btn');
+      const createCampaignBtn = document.getElementById('create-campaign-btn');
+      const uploadSegmentImageBtn = document.getElementById('upload-segment-image-btn');
+      const segmentImageModal = document.getElementById('segment-image-modal');
+
+      if (currentSegmentCandidate && uploadSegmentImageBtn && segmentImageModal) {
+        const imageInput = document.getElementById('segment-image-input');
+        const imagePreview = document.getElementById('segment-image-preview');
+        const imageUploadBtn = document.getElementById('segment-image-upload-btn');
+        const imageCancelBtn = document.getElementById('segment-image-cancel-btn');
+        const imageStatusEl = document.getElementById('segment-image-status');
+
+        const closeModal = () => {
+          segmentImageModal.style.display = 'none';
+          if (imageStatusEl) {
+            imageStatusEl.textContent = '';
+            imageStatusEl.style.color = 'var(--text-muted)';
+          }
+          if (imageInput) {
+            imageInput.value = '';
+          }
+          if (imagePreview) {
+            imagePreview.style.display = 'none';
+            imagePreview.src = '';
+          }
+        };
+
+        uploadSegmentImageBtn.addEventListener('click', () => {
+          // Empezar una nueva selección de imágenes para este segmento:
+          // solo las que se suban en esta sesión se enviarán al backend.
+          currentSegmentCandidate.imageUrlsPromo = [];
+          segmentImageModal.style.display = 'flex';
+        });
+
+        if (imageCancelBtn) {
+          imageCancelBtn.addEventListener('click', () => {
+            closeModal();
+          });
+        }
+
+        if (imageInput && imagePreview) {
+          imageInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            const file = files && files[0];
+            if (!file) {
+              imagePreview.style.display = 'none';
+              imagePreview.src = '';
+              if (imageStatusEl) {
+                imageStatusEl.textContent = '';
+                imageStatusEl.style.color = 'var(--text-muted)';
+              }
+              return;
+            }
+
+            const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+            if (file.size > MAX_IMAGE_SIZE_BYTES) {
+              if (imageStatusEl) {
+                imageStatusEl.textContent = 'Una de las imágenes excede el tamaño máximo permitido de 5MB.';
+                imageStatusEl.style.color = '#ef4444';
+              }
+              imageInput.value = '';
+              imagePreview.style.display = 'none';
+              imagePreview.src = '';
+              return;
+            }
+
+            const objectUrl = URL.createObjectURL(file);
+            imagePreview.src = objectUrl;
+            imagePreview.style.display = 'block';
+
+            if (imageStatusEl) {
+              const count = files ? files.length : 1;
+              imageStatusEl.textContent = count === 1
+                ? '1 imagen seleccionada.'
+                : `${count} imágenes seleccionadas.`;
+              imageStatusEl.style.color = 'var(--text-muted)';
+            }
+          });
+        }
+
+        if (imageUploadBtn && imageInput) {
+          imageUploadBtn.addEventListener('click', async () => {
+            try {
+              const files = imageInput.files ? Array.from(imageInput.files) : [];
+              if (!files.length) {
+                if (imageStatusEl) {
+                  imageStatusEl.textContent = 'Primero selecciona al menos una imagen.';
+                  imageStatusEl.style.color = '#ef4444';
+                }
+                return;
+              }
+
+              imageUploadBtn.disabled = true;
+              imageUploadBtn.textContent = 'Subiendo...';
+              if (imageStatusEl) {
+                imageStatusEl.textContent = `Subiendo ${files.length} imagen(es)...`;
+                imageStatusEl.style.color = 'var(--text-muted)';
+              }
+
+              const uploadedUrls = [];
+
+              for (const file of files) {
+                const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+                if (file.size > MAX_IMAGE_SIZE_BYTES) {
+                  throw new Error(`La imagen "${file.name}" excede el tamaño máximo permitido de 5MB.`);
+                }
+                const imageUrl = await uploadSegmentImage(file);
+                uploadedUrls.push(imageUrl);
+                updateSegmentImageInCache(imageUrl);
+              }
+
+              // Actualizar el candidato con todas las imágenes subidas
+              if (!Array.isArray(currentSegmentCandidate.imageUrlsPromo)) {
+                currentSegmentCandidate.imageUrlsPromo = [];
+              }
+              uploadedUrls.forEach((url) => {
+                if (!currentSegmentCandidate.imageUrlsPromo.includes(url)) {
+                  currentSegmentCandidate.imageUrlsPromo.push(url);
+                }
+              });
+
+              // Mantener imageUrlPromo como imagen principal (primera) si no estaba definida
+              if (!currentSegmentCandidate.imageUrlPromo || !currentSegmentCandidate.imageUrlPromo.trim()) {
+                currentSegmentCandidate.imageUrlPromo = currentSegmentCandidate.imageUrlsPromo[0] || null;
+              }
+
+              if (imageStatusEl) {
+                const total = currentSegmentCandidate.imageUrlsPromo.length;
+                imageStatusEl.textContent = total === 1
+                  ? 'Imagen subida correctamente (1 en total).'
+                  : `Imágenes subidas correctamente (${total} en total).`;
+                imageStatusEl.style.color = '#22c55e';
+              }
+
+              const segmentStatusEl = document.getElementById('segment-status');
+              if (segmentStatusEl) {
+                const total = currentSegmentCandidate.imageUrlsPromo.length;
+                segmentStatusEl.textContent = total === 1
+                  ? '1 imagen promocional asociada al segmento.'
+                  : `${total} imágenes promocionales asociadas al segmento.`;
+                segmentStatusEl.style.color = '#22c55e';
+              }
+
+              // Habilitar el botón de crear segmento ahora que hay al menos una imagen
+              const createSegmentBtnRef = document.getElementById('create-segment-btn');
+              if (createSegmentBtnRef && currentSegmentCandidate.imageUrlsPromo.length > 0) {
+                createSegmentBtnRef.disabled = false;
+                createSegmentBtnRef.title = '';
+              }
+
+              closeModal();
+            } catch (error) {
+              console.error('Error al subir imagen de segmento:', error);
+              if (imageStatusEl) {
+                imageStatusEl.textContent = 'Error al subir imagen: ' + error.message;
+                imageStatusEl.style.color = '#ef4444';
+              }
+            } finally {
+              imageUploadBtn.disabled = false;
+              imageUploadBtn.textContent = 'Subir a Cloudinary';
+            }
+          });
+        }
+      }
+
+      if (createSegmentBtn && currentSegmentCandidate) {
+        const segmentStatusEl = document.getElementById('segment-status');
+
+        // Inicialmente, exigir que exista al menos una imagen antes de permitir crear el segmento
+        const hasImage =
+          !!(currentSegmentCandidate.imageUrlPromo && currentSegmentCandidate.imageUrlPromo.trim()) ||
+          (Array.isArray(currentSegmentCandidate.imageUrlsPromo) &&
+            currentSegmentCandidate.imageUrlsPromo.length > 0);
+        if (!hasImage) {
+          createSegmentBtn.disabled = true;
+          createSegmentBtn.title = 'Primero sube una imagen para este segmento.';
+        } else {
+          createSegmentBtn.disabled = false;
+          createSegmentBtn.title = '';
+        }
+
+        createSegmentBtn.addEventListener('click', async () => {
+          try {
+            createSegmentBtn.disabled = true;
+            createSegmentBtn.textContent = 'Creando segmento...';
+
+            const payload = {
+              sourceDocId: currentSegmentCandidate.sourceDocId,
+              descripcionQuery: currentSegmentCandidate.descripcionQuery,
+              canalesOrigen: currentSegmentCandidate.canalesOrigen,
+              // ÚNICO campo con TODAS las imágenes (array)
+              imageUrlPromo: Array.isArray(currentSegmentCandidate.imageUrlsPromo)
+                ? currentSegmentCandidate.imageUrlsPromo
+                : (currentSegmentCandidate.imageUrlPromo
+                    ? [currentSegmentCandidate.imageUrlPromo]
+                    : []),
+              clientes: currentSegmentCandidate.clientes,
+            };
+
+            const resSeg = await fetchWithAuth('/api/segments/create/from-rag', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+
+            const segData = await resSeg.json();
+            if (!resSeg.ok || !segData.ok) {
+              // Si la API devuelve error (incluyendo falta/formato de imageUrlPromo), mostrarlo
+              const message = segData.message || 'Error al crear segmento';
+              throw new Error(message);
+            }
+
+            if (segmentStatusEl) {
+              segmentStatusEl.textContent = 'Segmento creado correctamente. ID: ' + segData.data.segment._id;
+              segmentStatusEl.style.color = '#22c55e';
+            }
+            createSegmentBtn.textContent = 'Segmento creado';
+
+            // Guardar el ID del segmento en el candidato actual para poder iniciar campaña
+            if (segData.data && segData.data.segment && segData.data.segment._id) {
+              currentSegmentCandidate.segmentId = segData.data.segment._id;
+              // Habilitar el botón de campaña si existe
+              const campaignBtn = document.getElementById('create-campaign-btn');
+              if (campaignBtn) {
+                campaignBtn.disabled = false;
+                campaignBtn.title = '';
+              }
+            }
+          } catch (err) {
+            console.error('Error al crear segmento:', err);
+            if (segmentStatusEl) {
+              segmentStatusEl.textContent = 'Error al crear segmento: ' + err.message;
+              segmentStatusEl.style.color = '#ef4444';
+            }
+            createSegmentBtn.disabled = false;
+            createSegmentBtn.textContent = '➕ Crear segmento';
+          }
+        });
+      }
+
+      // Botón para crear/iniciar campaña a partir del segmento
+      if (createCampaignBtn && currentSegmentCandidate) {
+        const segmentStatusEl = document.getElementById('segment-status');
+
+        const hasSegmentId = !!currentSegmentCandidate.segmentId;
+        if (!hasSegmentId) {
+          createCampaignBtn.disabled = true;
+          createCampaignBtn.title = 'Primero crea el segmento para poder iniciar una campaña.';
+        }
+
+        createCampaignBtn.addEventListener('click', async () => {
+          try {
+            const segmentId = currentSegmentCandidate.segmentId;
+            if (!segmentId) {
+              if (segmentStatusEl) {
+                segmentStatusEl.textContent = 'No hay un segmento disponible. Crea el segmento antes de iniciar la campaña.';
+                segmentStatusEl.style.color = '#ef4444';
+              }
+              return;
+            }
+
+            const originalText = createCampaignBtn.textContent;
+            createCampaignBtn.disabled = true;
+            createCampaignBtn.textContent = 'Creando campaña...';
+
+            // Payload mínimo para iniciar campaña; ajusta endpoint/estructura según tu backend
+            const payload = {
+              segmentId,
+            };
+
+            const resCamp = await fetchWithAuth('/api/campaigns/start-from-segment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+
+            const campData = await resCamp.json().catch(() => ({
+              ok: false,
+              message: 'Error al crear campaña',
+            }));
+
+            if (!resCamp.ok || !campData.ok) {
+              const message = campData.message || 'Error al crear campaña';
+              throw new Error(message);
+            }
+
+            const campaignId =
+              (campData.data && campData.data.campaign && (campData.data.campaign._id || campData.data.campaign.id)) ||
+              (campData.data && (campData.data.campaignId || campData.data.id)) ||
+              null;
+
+            if (segmentStatusEl) {
+              segmentStatusEl.textContent =
+                'Campaña creada correctamente.' + (campaignId ? ' ID: ' + campaignId : '');
+              segmentStatusEl.style.color = '#22c55e';
+            }
+
+            createCampaignBtn.textContent = 'Campaña creada';
+          } catch (err) {
+            console.error('Error al crear campaña:', err);
+            if (segmentStatusEl) {
+              segmentStatusEl.textContent = 'Error al crear campaña: ' + err.message;
+              segmentStatusEl.style.color = '#ef4444';
+            }
+            createCampaignBtn.disabled = false;
+            createCampaignBtn.textContent = '🚀 Crear campaña';
+          }
+        });
+      }
+    }
+
     async function sendQuestion() {
       const questionInput = document.getElementById("question-input");
       const statusEl = document.getElementById("rag-status");
@@ -1142,35 +1953,16 @@
         }
 
         statusEl.textContent = "Respuesta recibida.";
+
+        // Guardar en cache esta respuesta para este PDF
+        saveLastRagResponse(selectedPdfId, question, data.data);
+
+        // Renderizar respuesta (texto + tabla + botones) desde data.data
+        renderRagResponseFromData(data.data);
         
-        // Procesar la respuesta para convertir Markdown básico a HTML
-        const formattedAnswer = formatMarkdownToHtml(data.data?.answer || "(sin respuesta)");
-        
-        // Construir HTML completo de la respuesta
-        let fullAnswerHTML = formattedAnswer;
-        
-        // Detectar si hay datos estructurados
-        if (data.data?.structuredData && Array.isArray(data.data.structuredData) && data.data.structuredData.length > 0) {
-          const totalRows = data.data.totalRows || data.data.structuredData.length;
-          const tableHTML = renderStructuredData(data.data.structuredData, totalRows);
-          fullAnswerHTML += tableHTML;
-          
-          // Agregar botón de descarga si existe exportId
-          if (data.data.exportId) {
-            const exportId = data.data.exportId;
-            fullAnswerHTML += `<button id="export-excel-btn" class="export-button" data-export-id="${exportId}">📥 Descargar Excel</button>`;
-          }
-        }
-        
-        // Mostrar la respuesta con efecto suave
-        answerEl.innerHTML = fullAnswerHTML;
-        
-        // Configurar evento del botón de descarga si existe
-        const exportBtn = document.getElementById('export-excel-btn');
-        if (exportBtn) {
-          const exportId = exportBtn.getAttribute('data-export-id');
-          exportBtn.addEventListener('click', () => downloadExcel(exportId));
-        }
+        // 🔥 Limpiar textarea y devolver el foco
+        questionInput.value = "";
+        questionInput.focus();
         
         // Auto-scroll al final del contenido después de renderizar
         setTimeout(() => {

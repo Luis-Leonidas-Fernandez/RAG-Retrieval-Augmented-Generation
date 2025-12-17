@@ -189,6 +189,33 @@ export class SearchRagQueryUseCase {
           }
         }
 
+        // 2.1. Construir candidato de segmento a partir de TODOS los registros tabulares
+        let segmentCandidate = null;
+
+        const clientes = structuredDataFull
+          .map((item) => ({
+            nombre: item.name || "",
+            email: item.email || "",
+            vehiculo: item.vehicle || "",
+            // Si viene desde parser tabular, puede incluir teléfono
+            telefono: item.phone || "",
+          }))
+          // Filtrar filas completamente vacías por seguridad
+          .filter(
+            (c) => c.nombre || c.email || c.vehiculo || c.telefono
+          );
+
+        if (clientes.length > 0) {
+          segmentCandidate = {
+            tenantId,
+            sourceDocId: pdfId,
+            descripcionQuery: question,
+            canalesOrigen: ["EMAIL"],
+            imageUrlPromo: null,
+            clientes,
+          };
+        }
+
         // 3. Generar respuesta amigable con LLM (usando solo resumen, NO structuredDataFull completo)
         const prompt = `El usuario pregunta: "${question}"
         
@@ -332,6 +359,8 @@ Genera una respuesta amigable y descriptiva basada en estos datos REALES. IMPORT
           totalRows,
           dataType: 'table',
           exportId,
+          // Opcional: solo presente cuando hay clientes duplicados
+          segmentCandidate,
         });
       }
 

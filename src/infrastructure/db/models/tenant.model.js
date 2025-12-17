@@ -14,6 +14,10 @@ const TenantSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    brandName: {
+      type: String,
+      trim: true,
+    },
     settings: {
       maxUsers: { type: Number, default: 10 },
       maxPdfs: { type: Number, default: 100 },
