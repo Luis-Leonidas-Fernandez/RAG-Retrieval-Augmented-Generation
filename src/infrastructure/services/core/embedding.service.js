@@ -40,8 +40,42 @@ export async function embedText(text) {
 }
 
 /**
+ * Procesa un batch individual de embeddings
+ * @param {Array<string>} batchTexts - Textos del batch a procesar
+ * @param {number} batchIndex - Índice del batch (para logging y ordenamiento)
+ * @returns {Promise<{batchIndex: number, vectors: Array<Array<number>>}>}
+ */
+async function processEmbeddingBatch(batchTexts, batchIndex) {
+  const batchStartTime = Date.now();
+  
+  // Preprocesar cada texto antes de embeder
+  const processedTexts = batchTexts.map((t) => {
+    if (!t || !t.trim()) return "";
+    return preprocessForEmbedding(t);
+  });
+
+  const apiStartTime = Date.now();
+  const response = await openai.embeddings.create({
+    model: EMBEDDING_MODEL,
+    input: processedTexts,
+  });
+  const apiTime = Date.now() - apiStartTime;
+
+  const batchTime = Date.now() - batchStartTime;
+  const vectors = response.data.map(item => item.embedding);
+  
+  console.log(`[Embedding] ✅ Batch #${batchIndex + 1} completado en ${batchTime}ms (API: ${apiTime}ms, ${vectors.length} vectores generados)`);
+
+  return {
+    batchIndex,
+    vectors,
+  };
+}
+
+/**
  * Embebe un array de strings en batch.
  * Devuelve un array de arrays de floats en el mismo orden.
+ * Soporta procesamiento paralelo configurable mediante EMBEDDING_PARALLEL_REQUESTS.
  */
 export async function embedBatch(texts, batchSize = 64) {
   if (!Array.isArray(texts) || texts.length === 0) {
@@ -84,40 +118,85 @@ export async function embedBatch(texts, batchSize = 64) {
     console.log(`[Embedding]   - Batch size reducido: ${oldBatchSize} → ${batchSize} (tokens muy grandes)`);
   }
 
-  const allVectors = [];
-  let batchNumber = 0;
+  // Configuración de paralelismo
+  const MAX_PARALLEL_REQUESTS = parseInt(process.env.EMBEDDING_PARALLEL_REQUESTS || '1', 10);
+  const useParallelism = MAX_PARALLEL_REQUESTS > 1;
+  
+  if (useParallelism) {
+    console.log(`[Embedding]   - Paralelismo activado: ${MAX_PARALLEL_REQUESTS} requests paralelos`);
+  } else {
+    console.log(`[Embedding]   - Procesamiento secuencial (EMBEDDING_PARALLEL_REQUESTS=1 o no configurado)`);
+  }
+
   const totalBatches = Math.ceil(texts.length / batchSize);
   console.log(`[Embedding]   - Total de batches: ${totalBatches}`);
 
-  for (let i = 0; i < texts.length; i += batchSize) {
-    batchNumber++;
-    const batchStart = i;
-    const batchEnd = Math.min(i + batchSize, texts.length);
-    const currentBatchSize = batchEnd - batchStart;
-    
-    console.log(`[Embedding] 📦 Procesando batch #${batchNumber}/${totalBatches}: textos ${batchStart} a ${batchEnd - 1} (${currentBatchSize} textos)`);
-    
-    const batchStartTime = Date.now();
-    
-    // Preprocesar cada texto antes de embeder
-    const slice = texts.slice(i, i + batchSize).map((t) => {
-      if (!t || !t.trim()) return "";
-      return preprocessForEmbedding(t);
+  const allVectors = [];
+
+  if (useParallelism && totalBatches > 1) {
+    // Procesamiento paralelo con control de concurrencia
+    const batchPromises = [];
+    const batchResults = [];
+
+    for (let i = 0; i < texts.length; i += batchSize) {
+      const batchIndex = Math.floor(i / batchSize);
+      const batchStart = i;
+      const batchEnd = Math.min(i + batchSize, texts.length);
+      const currentBatchSize = batchEnd - batchStart;
+      const slice = texts.slice(batchStart, batchEnd);
+
+      console.log(`[Embedding] 📦 Preparando batch #${batchIndex + 1}/${totalBatches}: textos ${batchStart} a ${batchEnd - 1} (${currentBatchSize} textos)`);
+
+      // Crear promesa para este batch
+      const batchPromise = processEmbeddingBatch(slice, batchIndex)
+        .then(result => {
+          batchResults.push(result);
+          return result;
+        })
+        .catch(error => {
+          console.error(`[Embedding] ❌ Error en batch #${batchIndex + 1}:`, error.message);
+          // Retornar resultado vacío para mantener orden
+          return { batchIndex, vectors: [] };
+        });
+
+      batchPromises.push(batchPromise);
+
+      // Procesar en grupos de MAX_PARALLEL_REQUESTS
+      if (batchPromises.length >= MAX_PARALLEL_REQUESTS) {
+        await Promise.all(batchPromises);
+        // Limpiar array de promesas después de completar
+        batchPromises.length = 0;
+        console.log(`[Embedding] 📊 Progreso: ${batchResults.length}/${totalBatches} batches completados`);
+      }
+    }
+
+    // Procesar batches restantes
+    if (batchPromises.length > 0) {
+      await Promise.all(batchPromises);
+    }
+
+    // Ordenar resultados por batchIndex y extraer vectores
+    batchResults.sort((a, b) => a.batchIndex - b.batchIndex);
+    batchResults.forEach(result => {
+      allVectors.push(...result.vectors);
     });
 
-    const apiStartTime = Date.now();
-    const response = await openai.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: slice,
-    });
-    const apiTime = Date.now() - apiStartTime;
-
-    const batchTime = Date.now() - batchStartTime;
-    console.log(`[Embedding] ✅ Batch #${batchNumber} completado en ${batchTime}ms (API: ${apiTime}ms, ${response.data.length} vectores generados)`);
-
-    response.data.forEach((item) => {
-      allVectors.push(item.embedding);
-    });
+    console.log(`[Embedding] ✅ Procesamiento paralelo completado`);
+  } else {
+    // Procesamiento secuencial (comportamiento original)
+    let batchNumber = 0;
+    for (let i = 0; i < texts.length; i += batchSize) {
+      batchNumber++;
+      const batchStart = i;
+      const batchEnd = Math.min(i + batchSize, texts.length);
+      const currentBatchSize = batchEnd - batchStart;
+      
+      console.log(`[Embedding] 📦 Procesando batch #${batchNumber}/${totalBatches}: textos ${batchStart} a ${batchEnd - 1} (${currentBatchSize} textos)`);
+      
+      const slice = texts.slice(batchStart, batchEnd);
+      const result = await processEmbeddingBatch(slice, batchNumber - 1);
+      allVectors.push(...result.vectors);
+    }
   }
 
   console.log(`[Embedding] ✅ Total de vectores generados: ${allVectors.length}`);

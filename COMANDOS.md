@@ -31,6 +31,8 @@ PDF_BATCH_SIZE=100
 QDRANT_BATCH_SIZE=50
 EMBEDDING_BATCH_SIZE=64
 EMBEDDING_MAX_TEXTS=200
+EMBEDDING_PARALLEL_REQUESTS=3
+QDRANT_PARALLEL_BATCHES=2
 RAG_MAX_CONTEXT_LENGTH=4000
 RAG_SCORE_THRESHOLD=0.3
 EXPRESS_JSON_LIMIT_MB=10
@@ -58,13 +60,15 @@ ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173"
 - `QDRANT_BATCH_SIZE`: Cantidad de chunks a procesar por lote al generar embeddings. Por defecto 50.
 - `EMBEDDING_BATCH_SIZE`: Tamaño de batch para embeddings de OpenAI. Por defecto 64.
 - `EMBEDDING_MAX_TEXTS`: Límite máximo de textos a procesar en una sola llamada a embedBatch. Por defecto 200.
+- `EMBEDDING_PARALLEL_REQUESTS`: Número de requests paralelos a OpenAI API para generar embeddings. Por defecto 1 (secuencial). Valores recomendados: 3-5 para mejorar rendimiento en archivos grandes. Aumenta el tiempo de procesamiento pero puede sobrecargar la API si es muy alto.
+- `QDRANT_PARALLEL_BATCHES`: Número de batches paralelos para indexar en Qdrant. Por defecto 1 (secuencial). Valores recomendados: 2-3 para mejorar rendimiento. Valores más altos pueden sobrecargar Qdrant.
 - `RAG_MAX_CONTEXT_LENGTH`: Longitud máxima del contexto en caracteres para respuestas RAG. Por defecto 4000.
 - `RAG_SCORE_THRESHOLD`: Umbral mínimo de similitud (score) para considerar un chunk como relevante en búsquedas RAG. Valor entre 0.0 y 1.0. Por defecto 0.3. Valores más bajos (0.25-0.35) traen más resultados pero pueden incluir ruido. Valores más altos (0.4-0.6) son más estrictos pero pueden perder resultados relevantes. Para solicitudes de índice se usa automáticamente 0.3.
 
 **Recomendaciones según recursos del servidor**:
-- **Servidores pequeños (2GB RAM)**: Reduce `PDF_BATCH_SIZE=50`, `QDRANT_BATCH_SIZE=25`, `PDF_WORKER_THREADS=1`
-- **Servidores medianos (4GB RAM)**: Valores por defecto están bien
-- **Servidores grandes (8GB+ RAM)**: Puedes aumentar `PDF_BATCH_SIZE=200`, `QDRANT_BATCH_SIZE=100`, `PDF_WORKER_THREADS=4`
+- **Servidores pequeños (2GB RAM)**: Reduce `PDF_BATCH_SIZE=50`, `QDRANT_BATCH_SIZE=25`, `PDF_WORKER_THREADS=1`, `EMBEDDING_PARALLEL_REQUESTS=1`, `QDRANT_PARALLEL_BATCHES=1`
+- **Servidores medianos (4GB RAM)**: Valores por defecto están bien. Puedes activar paralelismo con `EMBEDDING_PARALLEL_REQUESTS=3`, `QDRANT_PARALLEL_BATCHES=2`
+- **Servidores grandes (8GB+ RAM)**: Puedes aumentar `PDF_BATCH_SIZE=200`, `QDRANT_BATCH_SIZE=100`, `PDF_WORKER_THREADS=4`, `EMBEDDING_PARALLEL_REQUESTS=5`, `QDRANT_PARALLEL_BATCHES=3`
 
 **Configuración del Heap de Node.js**:
 - El tamaño máximo del heap está configurado a **2048 MB (2 GB)** en `package.json` mediante el flag `--max-old-space-size=2048`

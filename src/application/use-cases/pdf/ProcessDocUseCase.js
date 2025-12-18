@@ -100,14 +100,45 @@ export class ProcessDocUseCase {
       batchNumber++;
       console.log(`[ProcessDocUseCase] Procesando batch ${batchNumber} - ${batch.length} chunks (restantes: ${allChunks.length})`);
 
+      console.log(`[ProcessDocUseCase] 🔄 Mapeando ${batch.length} chunks a formato de base de datos...`);
+      
+      // Función para normalizar sectionType a valores válidos
+      const normalizeSectionType = (sectionType) => {
+        const validTypes = ['toc', 'chapter_title', 'paragraph', 'table', 'other'];
+        
+        // Si es un tipo válido, retornarlo
+        if (validTypes.includes(sectionType)) {
+          return sectionType;
+        }
+        
+        // Mapear valores inválidos conocidos a tipos válidos
+        const typeMapping = {
+          'row': 'table',  // Filas de Excel/CSV → table
+          'cell': 'table', // Celdas → table
+          'header': 'toc', // Headers → toc
+        };
+        
+        if (typeMapping[sectionType]) {
+          console.warn(`[ProcessDocUseCase] ⚠️  Normalizando sectionType "${sectionType}" → "${typeMapping[sectionType]}"`);
+          return typeMapping[sectionType];
+        }
+        
+        // Si no hay mapeo, usar "other" como fallback
+        console.warn(`[ProcessDocUseCase] ⚠️  sectionType desconocido "${sectionType}", usando "other" como fallback`);
+        return 'other';
+      };
+      
       const chunkData = batch.map((chunk, idx) => {
+        // Normalizar sectionType antes de crear el objeto
+        const normalizedSectionType = normalizeSectionType(chunk.sectionType || "paragraph");
+        
         const chunkObj = {
           pdfId,
           index: totalInserted + idx,
           content: chunk.text,
           page: chunk.page,
           status: "chunked",
-          sectionType: chunk.sectionType || "paragraph",
+          sectionType: normalizedSectionType,
         };
 
         // Agregar campos opcionales solo si existen
@@ -118,8 +149,28 @@ export class ProcessDocUseCase {
           chunkObj.path = chunk.path;
         }
 
+        // Log de los primeros 3 chunks del batch
+        if (idx < 3) {
+          console.log(`[ProcessDocUseCase]   📝 Chunk ${totalInserted + idx} mapeado:`);
+          console.log(`[ProcessDocUseCase]     - index: ${chunkObj.index}`);
+          console.log(`[ProcessDocUseCase]     - page: ${chunkObj.page}`);
+          console.log(`[ProcessDocUseCase]     - sectionType: ${chunkObj.sectionType}${chunk.sectionType !== normalizedSectionType ? ` (normalizado de "${chunk.sectionType}")` : ''}`);
+          console.log(`[ProcessDocUseCase]     - content length: ${chunkObj.content?.length || 0} caracteres`);
+          console.log(`[ProcessDocUseCase]     - path: ${JSON.stringify(chunkObj.path || [])}`);
+          console.log(`[ProcessDocUseCase]     - content preview: ${(chunkObj.content || '').substring(0, 60)}...`);
+        }
+
         return chunkObj;
       });
+      
+      // Validar sectionType antes de guardar (debería pasar siempre después de normalización)
+      const invalidChunks = chunkData.filter(c => !c.sectionType || !['toc', 'chapter_title', 'paragraph', 'table', 'other'].includes(c.sectionType));
+      if (invalidChunks.length > 0) {
+        console.error(`[ProcessDocUseCase] ❌ ERROR: ${invalidChunks.length} chunks con sectionType inválido en batch ${batchNumber} (después de normalización)`);
+        invalidChunks.forEach((c, i) => {
+          console.error(`[ProcessDocUseCase]   Chunk inválido ${i + 1}: sectionType="${c.sectionType}", index=${c.index}`);
+        });
+      }
 
       const insertedChunks = await this.chunkRepository.createMany(
         tenantId,

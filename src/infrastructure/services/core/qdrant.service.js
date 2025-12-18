@@ -167,6 +167,15 @@ export async function indexPdfChunksInQdrant(tenantId, pdfId) {
   console.log(`[Qdrant] Indexando chunks para tenantId: ${tenantId}, pdfId: ${pdfId}`);
 
   const BATCH_SIZE = parseInt(process.env.QDRANT_BATCH_SIZE || '50', 10); // Chunks por lote
+  const MAX_PARALLEL_BATCHES = parseInt(process.env.QDRANT_PARALLEL_BATCHES || '1', 10);
+  const useParallelism = MAX_PARALLEL_BATCHES > 1;
+  
+  if (useParallelism) {
+    console.log(`[Qdrant] Paralelismo activado: ${MAX_PARALLEL_BATCHES} batches paralelos`);
+  } else {
+    console.log(`[Qdrant] Procesamiento secuencial (QDRANT_PARALLEL_BATCHES=1 o no configurado)`);
+  }
+
   let totalInserted = 0;
 
   // 1. Verificar si hay chunks pendientes (sin cargar todos)
@@ -195,28 +204,62 @@ export async function indexPdfChunksInQdrant(tenantId, pdfId) {
     .cursor();
 
   let batch = [];
+  let pendingBatches = []; // Array para acumular batches antes de procesar en paralelo
 
   try {
     for await (const chunk of cursor) {
       batch.push(chunk);
 
-      // Cuando el lote está completo, procesarlo
+      // Cuando el lote está completo, agregarlo a la cola de procesamiento
       if (batch.length >= BATCH_SIZE) {
-        const processed = await processBatch(tenantId, batch);
-        totalInserted += processed;
-        
-        // Liberar memoria del lote
-        batch = [];
-        
-        console.log(`[Qdrant] Procesados ${totalInserted}/${count} chunks...`);
+        const batchToProcess = [...batch]; // Copiar batch para procesamiento
+        batch = []; // Limpiar batch actual
+
+        if (useParallelism) {
+          // Agregar a la cola de batches pendientes
+          pendingBatches.push(processBatch(tenantId, batchToProcess).catch(error => {
+            console.error(`[Qdrant] ❌ Error procesando batch:`, error.message);
+            return 0; // Retornar 0 en caso de error para no romper el conteo
+          }));
+
+          // Procesar en paralelo cuando alcanzamos el límite de concurrencia
+          if (pendingBatches.length >= MAX_PARALLEL_BATCHES) {
+            const results = await Promise.all(pendingBatches);
+            const processed = results.reduce((sum, count) => sum + count, 0);
+            totalInserted += processed;
+            pendingBatches = []; // Limpiar array de promesas
+            
+            console.log(`[Qdrant] Procesados ${totalInserted}/${count} chunks...`);
+          }
+        } else {
+          // Procesamiento secuencial (comportamiento original)
+          const processed = await processBatch(tenantId, batchToProcess);
+          totalInserted += processed;
+          console.log(`[Qdrant] Procesados ${totalInserted}/${count} chunks...`);
+        }
       }
     }
 
-    // 7. Procesar último lote si queda algo
+    // Procesar último lote si queda algo
     if (batch.length > 0) {
-      const processed = await processBatch(tenantId, batch);
-      totalInserted += processed;
+      if (useParallelism) {
+        pendingBatches.push(processBatch(tenantId, batch).catch(error => {
+          console.error(`[Qdrant] ❌ Error procesando último batch:`, error.message);
+          return 0;
+        }));
+      } else {
+        const processed = await processBatch(tenantId, batch);
+        totalInserted += processed;
+      }
       batch = null; // Liberar referencia
+    }
+
+    // Procesar batches pendientes restantes (si hay paralelismo)
+    if (useParallelism && pendingBatches.length > 0) {
+      const results = await Promise.all(pendingBatches);
+      const processed = results.reduce((sum, count) => sum + count, 0);
+      totalInserted += processed;
+      pendingBatches = [];
     }
   } finally {
     // Asegurar que el cursor se cierre
