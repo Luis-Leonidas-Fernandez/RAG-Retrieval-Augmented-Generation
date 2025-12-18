@@ -42,17 +42,27 @@ export class ExtractStructuredDataUseCase {
       .map((chunk) => chunk.content)
       .join("\n");
 
+    console.log(`[ExtractStructuredData] Longitud del texto completo: ${fullText.length} caracteres`);
+    console.log(`[ExtractStructuredData] Primeros 500 caracteres del texto:`, fullText.substring(0, 500));
+
     if (fullText) {
       // Filas tipo: | CLIENTE | EMAIL | COMPRO_VEHICULO | TELEFONO |
       const rowRegex =
         /^\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$/gm;
       let match;
+      let matchCount = 0;
 
       while ((match = rowRegex.exec(fullText)) !== null) {
+        matchCount++;
         const col1 = match[1].trim(); // CLIENTE / NOMBRE
         const col2 = match[2].trim(); // EMAIL
         const col3 = match[3].trim(); // COMPRO_VEHICULO
         const col4 = match[4].trim(); // TELEFONO
+
+        // Log de las primeras 3 filas encontradas
+        if (matchCount <= 3) {
+          console.log(`[ExtractStructuredData] Fila ${matchCount} encontrada:`, { col1, col2, col3, col4 });
+        }
 
         // Saltar cabecera
         const isHeaderRow =
@@ -67,12 +77,16 @@ export class ExtractStructuredDataUseCase {
           ].includes(col2.toLowerCase());
 
         if (isHeaderRow) {
+          console.log(`[ExtractStructuredData] Fila ${matchCount} es cabecera, omitida`);
           continue;
         }
 
         // El segundo campo debe parecer un email real
         const looksLikeEmail = col2.includes("@") && col2.includes(".");
         if (!looksLikeEmail) {
+          if (matchCount <= 5) {
+            console.log(`[ExtractStructuredData] Fila ${matchCount} omitida: col2 no parece email: "${col2}"`);
+          }
           continue;
         }
 
@@ -90,6 +104,8 @@ export class ExtractStructuredDataUseCase {
           break;
         }
       }
+
+      console.log(`[ExtractStructuredData] Total de matches del regex: ${matchCount}, registros válidos: ${structuredData.length}`);
     }
 
     // 2) Fallback al comportamiento anterior si no se encontró nada con el parser de 4 columnas

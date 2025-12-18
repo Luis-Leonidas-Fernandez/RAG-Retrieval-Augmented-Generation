@@ -51,13 +51,47 @@ export async function loadExcelChunks(filePath, sourceFile) {
       // row.values es un array tipo [ , col1, col2, ... ]
       const cells = row.values
         .slice(1) // ignorar índice 0 vacío
-        .map((value, index) => {
-          const raw = value == null ? "" : String(value).trim();
-          if (!raw) return null;
-          // Etiquetamos genéricamente; si conoces nombres de columnas puedes mapearlos aquí
-          return `col${index + 1}: ${raw}`;
+        .map((value) => {
+          // Manejar diferentes tipos de valores de ExcelJS para evitar [object Object]
+          let raw = "";
+          
+          if (value == null || value === undefined) {
+            raw = "";
+          } else if (value instanceof Date) {
+            // Formatear fechas como string legible (YYYY-MM-DD)
+            raw = value.toISOString().split('T')[0];
+          } else if (typeof value === 'object') {
+            // Si es un objeto, intentar extraer valor útil
+            if (value.text !== undefined) {
+              raw = String(value.text);
+            } else if (value.richText && Array.isArray(value.richText)) {
+              raw = value.richText.map(rt => rt.text || '').join('');
+            } else if (value.formula) {
+              raw = String(value.formula);
+            } else if (value.result !== undefined) {
+              // Si tiene resultado calculado, usar ese
+              raw = String(value.result);
+            } else {
+              // Último recurso: intentar JSON stringify para objetos simples
+              try {
+                const jsonStr = JSON.stringify(value);
+                // Si el JSON es muy largo o parece un objeto complejo, usar toString
+                if (jsonStr.length > 100 || jsonStr.startsWith('{')) {
+                  raw = String(value);
+                } else {
+                  raw = jsonStr;
+                }
+              } catch {
+                raw = String(value);
+              }
+            }
+          } else {
+            raw = String(value);
+          }
+          
+          return raw.trim();
         })
-        .filter(Boolean);
+        .filter(cell => cell !== ""); // Filtrar celdas vacías
 
       if (cells.length === 0) {
         skippedRows++;
@@ -67,7 +101,8 @@ export async function loadExcelChunks(filePath, sourceFile) {
         return;
       }
 
-      const text = cells.join(" | ");
+      // Formato con pipes para que coincida con el parser: | col1 | col2 | col3 | col4 |
+      const text = `| ${cells.join(" | ")} |`;
       sheetRows++;
 
       chunks.push({
