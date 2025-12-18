@@ -131,11 +131,11 @@ export class SearchRagQueryUseCase {
         console.log(`[RAG] Pregunta detectada como requerimiento de respuesta estructurada`);
 
         // Verificar si el documento es tabular
-        const isTabular = this.isTabularDocument(docMeta);
+        const isTabular = this.isTabularDocument(pdf);
         console.log(`[RAG] isTabularDocument: ${isTabular}`, {
-          originalName: docMeta?.originalName,
-          mimetype: docMeta?.mimetype,
-          documentKind: docMeta?.documentKind
+          originalName: pdf?.originalName,
+          mimetype: pdf?.mimetype,
+          documentKind: pdf?.documentKind
         });
 
         // 1. Extraer datos estructurados
