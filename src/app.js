@@ -40,25 +40,34 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
   : ["http://localhost:3002", "http://localhost:5173", "http://127.0.0.1:3002"];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Permitir requests sin origin (Postman, curl, etc.) solo en desarrollo
-      if (!origin && process.env.NODE_ENV === "development") {
-        return callback(null, true);
-      }
-      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error("No permitido por CORS"));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // ✅ Permitir requests sin origin (HTML, JS, CSS, same-origin)
+        if (!origin) {
+          return callback(null, true);
+        }
+  
+        const allowedOrigins = process.env.ALLOWED_ORIGINS
+          ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+          : [
+              "http://localhost:3002",
+              "http://localhost:5173",
+              "https://rag.inriservice.com"
+            ];
+  
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+  
+        return callback(new Error("No permitido por CORS"));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    })
+  );
+  
 // 3. Límites de payload configurables
 const EXPRESS_JSON_LIMIT = process.env.EXPRESS_JSON_LIMIT_MB 
   ? `${process.env.EXPRESS_JSON_LIMIT_MB}mb` 
