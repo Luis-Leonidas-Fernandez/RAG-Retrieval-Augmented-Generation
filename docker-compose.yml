@@ -4,10 +4,11 @@ services:
   mongo-rag:
     image: mongo:7
     container_name: mongo-rag
-    ports:
-      - "27017:27017"
     networks:
       - vector-rag-network
+    volumes:
+      - mongo_rag_db:/data/db
+      - mongo_rag_config:/data/configdb
 
   redis-rag:
     image: redis:7-alpine
@@ -35,21 +36,16 @@ services:
     env_file:
       - .env
     environment:
-      # Puerto interno del contenedor (debe ser 3000 para que Docker mapee correctamente)
       PORT: 3000
       # DESARROLLO: Usa DB_URL del .env (MongoDB Atlas)
       # Si DB_URL no está en .env, usa el MongoDB del contenedor como fallback
-      # PRODUCCIÓN: Cambia DB_URL aquí a mongodb://mongo-rag:27017/vector-db-rag
-      # o define DB_URL en el .env con la URL de producción
+      # PRODUCCIÓN: mongodb://mongo-rag:27017/vector-db-rag
       DB_URL: ${DB_URL:-mongodb://mongo-rag:27017/vector-db-rag}
-      # Servicios dentro de Docker (usar nombres de servicio)
       QDRANT_URL: http://qdrant-rag:6333
       REDIS_URL: redis://redis-rag:6379
-      # URL del segundo backend de campañas (configurar en .env o aquí)
-      # Por defecto usa http://api:3000 (nombre del servicio en docker-compose)
       CAMPAIGN_SERVICE_URL: ${CAMPAIGN_SERVICE_URL:-http://api:3000}
     volumes:
-      - ./uploads:/app/uploads  # Compartir carpeta uploads con host
+      - ./uploads:/app/uploads
     depends_on:
       - mongo-rag
       - redis-rag
@@ -57,11 +53,13 @@ services:
     networks:
       vector-rag-network:
         aliases:
-          - vector-rag  # Alias para que el servicio de campañas pueda acceder con http://vector-rag:3000
+          - vector-rag
 
 networks:
   vector-rag-network:
     name: vector-rag-network
-    driver: bridge
+    external: true
 
-
+volumes:
+  mongo_rag_db:
+  mongo_rag_config:
