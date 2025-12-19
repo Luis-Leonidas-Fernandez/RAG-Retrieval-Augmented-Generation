@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Iniciar Sesión - Vector RAG</title>
+  <title>Iniciar Sesión - Marketing 360</title>
   <style>
     * {
       margin: 0;
@@ -117,10 +117,20 @@
       justify-content: center;
       gap: 10px;
       margin-bottom: 8px;
+      color: var(--text-main);
+    }
+
+    .brand-name {
       background: linear-gradient(120deg, #e5e7eb, #c4b5fd, #38bdf8);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
+    }
+
+    .brand-number {
+      color: #f59e0b;
+      font-weight: 700;
+      text-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(245, 158, 11, 0.4);
     }
 
     .logo-dot {
@@ -331,6 +341,12 @@
         font-size: 1.5rem;
       }
     }
+
+    @media (min-width: 481px) and (max-width: 1024px) {
+      .card {
+        padding: 26px 24px 24px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -342,9 +358,10 @@
       <div class="title-row">
         <h1>
           <span class="logo-dot"></span>
-          Vector RAG
+          <span class="brand-name">Marketing</span>
+          <span class="brand-number">360</span>
         </h1>
-        <p class="subtitle">Accede a tu plataforma de documentos</p>
+        <p class="subtitle">Crea y envía campañas de marketing por Gmail y WhatsApp</p>
       </div>
 
       <!-- Tabs Login/Registro -->
@@ -433,7 +450,7 @@
               type="text" 
               id="registerBusinessName" 
               name="businessName" 
-              placeholder="Ej: Ford, Luigui, Herrería Javier"
+              placeholder="Nombre o marca del negocio"
               autocomplete="organization"
               minlength="1"
               maxlength="100"

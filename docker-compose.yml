@@ -1,13 +1,12 @@
-version: "3.9"
-
 services:
   mongo-rag:
     image: mongo:7
     container_name: mongo-rag
-    ports:
-      - "27017:27017"
     networks:
       - vector-rag-network
+    volumes:
+      - mongo_rag_db:/data/db
+      - mongo_rag_config:/data/configdb
 
   redis-rag:
     image: redis:7-alpine
@@ -62,6 +61,9 @@ services:
 networks:
   vector-rag-network:
     name: vector-rag-network
-    driver: bridge
+    external: true
 
+volumes:
+  mongo_rag_db:
+  mongo_rag_config:
 

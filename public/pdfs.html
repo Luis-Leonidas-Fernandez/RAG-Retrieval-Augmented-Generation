@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>PDFs subidos</title>
+  <title>DOCs subidos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     * {
@@ -96,6 +96,7 @@
       width: 100%;
       max-width: 960px;
       margin: 0 auto;
+      overflow-x: hidden;
     }
 
     .card {
@@ -333,10 +334,20 @@
       overflow: hidden;
       border: 1px solid var(--card-border);
       font-size: 13px;
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     thead {
       background: linear-gradient(90deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.98));
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+
+    tbody {
+      display: table-row-group;
     }
 
     th,
@@ -359,6 +370,7 @@
     }
 
     tr {
+      display: table-row;
       transition: background 0.12s ease;
     }
 
@@ -441,22 +453,76 @@
 
     @media (max-width: 640px) {
       body {
-        padding: 16px;
+        padding: 12px;
       }
 
       .card {
-        padding: 18px 14px 20px;
+        padding: 16px 12px 18px;
         border-radius: 18px;
+      }
+
+      .page-shell {
+        margin-top: 50px;
       }
 
       .top-bar {
         flex-direction: column;
         align-items: flex-start;
+        gap: 10px;
       }
 
       .top-right {
         align-items: flex-start;
         text-align: left;
+        width: 100%;
+      }
+
+      table {
+        font-size: 11px;
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      th,
+      td {
+        padding: 6px 8px;
+        white-space: nowrap;
+        min-width: 80px;
+      }
+
+      th:nth-child(1), td:nth-child(1) {
+        min-width: 120px;
+      }
+
+      th:nth-child(2), td:nth-child(2) {
+        min-width: 60px;
+      }
+
+      th:nth-child(3), td:nth-child(3) {
+        min-width: 70px;
+      }
+
+      th:nth-child(4), td:nth-child(4) {
+        min-width: 100px;
+      }
+
+      th:nth-child(5), td:nth-child(5) {
+        min-width: 140px;
+      }
+
+      th:nth-child(6), td:nth-child(6) {
+        min-width: 100px;
+      }
+    }
+
+    @media (min-width: 641px) and (max-width: 1024px) {
+      body {
+        padding: 16px;
+      }
+
+      .card {
+        padding: 20px 18px 22px;
       }
 
       table {
@@ -465,8 +531,289 @@
 
       th,
       td {
-        padding: 8px;
+        padding: 8px 10px;
       }
+    }
+
+    /* Sidebar Menu */
+    .menu-icon {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+      color: var(--accent);
+      font-size: 20px;
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .menu-icon:hover {
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1500;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      backdrop-filter: blur(4px);
+    }
+
+    .sidebar-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 280px;
+      background: var(--card-bg);
+      border-right: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+      z-index: 1501;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .sidebar.active {
+      transform: translateX(0);
+    }
+
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .sidebar-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .sidebar-brand-name {
+      background: linear-gradient(120deg, #e5e7eb, #c4b5fd, #38bdf8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .sidebar-brand-number {
+      color: #f59e0b;
+      font-weight: 700;
+      text-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(245, 158, 11, 0.4);
+    }
+
+    .sidebar-close {
+      cursor: pointer;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      color: var(--text-muted);
+      transition: background 0.2s ease, color 0.2s ease;
+      font-size: 20px;
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .sidebar-close:hover {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-main);
+    }
+
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar-menu-item {
+      margin-bottom: 8px;
+    }
+
+    .sidebar-menu-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      color: var(--text-main);
+      text-decoration: none;
+      transition: background 0.2s ease, transform 0.1s ease;
+      font-size: 14px;
+    }
+
+    .sidebar-menu-link:hover {
+      background: rgba(56, 189, 248, 0.1);
+      transform: translateX(4px);
+    }
+
+    .sidebar-menu-link.active {
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.2), rgba(56, 189, 248, 0.1));
+      border-radius: 10px;
+      transform: translateX(2px);
+    }
+
+    .sidebar-menu-icon {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+    }
+
+    .sidebar-user {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 640px) {
+      .sidebar {
+        width: 260px;
+      }
+    }
+
+    .pdfs-mobile-view {
+      display: none;
+    }
+
+    @media (max-width: 640px) {
+      table, thead, tbody {
+        display: none; /* Ocultar tabla en mobile */
+      }
+
+      .pdfs-mobile-view {
+        display: block;
+      }
+
+      .pdf-card {
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 12px;
+      }
+
+      .pdf-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 10px;
+        gap: 8px;
+      }
+
+      .pdf-card-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-main);
+        flex: 1;
+        word-break: break-word;
+      }
+
+      .pdf-card-status {
+        flex-shrink: 0;
+      }
+
+      .pdf-card-info {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+      }
+
+      .pdf-card-info-row {
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .pdf-card-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .pdf-card-button {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--accent);
+        background: rgba(15, 23, 42, 0.95);
+        color: var(--text-main);
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.15s ease;
+        box-sizing: border-box;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+      }
+
+      .pdf-card-button:hover:not(:disabled) {
+        background: #020617;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25);
+      }
+
+      .pdf-card-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        min-height: 36px;
+      }
+
+      .pdf-card-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 12px;
+        display: inline-block;
+        margin-top: 4px;
+      }
+
+      .pdf-card-actions .chunk-row-button,
+      .pdf-card-actions .rag-button {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding: 8px 12px !important;
+        width: 100% !important;
+        border-radius: 8px !important;
+        font-size: 12px !important;
+      }
+    }
+
+    .user-name-header {
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: capitalize;
+      background: linear-gradient(120deg, #e5e7eb, #38bdf8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
   </style>
 </head>
@@ -479,25 +826,60 @@
   </div>
 
   <!-- Navbar -->
-  <nav style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding: 12px 24px;">
-    <div style="max-width: 960px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
-      <div style="display: flex; align-items: center; gap: 16px;">
-        <a href="/index.html" style="color: var(--accent); text-decoration: none; font-weight: 600;">Vector RAG</a>
+  <nav style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding: 10px 16px;">
+    <div style="max-width: 960px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <button id="menuToggle" class="menu-icon" aria-label="Abrir menú">
+          ☰
+        </button>
         <span style="color: var(--text-muted);">|</span>
-        <span id="navUserName" style="color: var(--text-main); font-size: 0.9rem;"></span>
+        <span id="navUserName" class="user-name-header"></span>
       </div>
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <a href="/rag.html" style="color: var(--text-main); text-decoration: none; font-size: 0.9rem; padding: 6px 12px; border-radius: 8px; transition: background 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.1)'" onmouseout="this.style.background='transparent'">RAG</a>
-        <button id="logoutBtn" style="padding: 6px 12px; border-radius: 8px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; font-size: 0.9rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.1)'" onmouseout="this.style.background='transparent'">Cerrar Sesión</button>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <button id="logoutBtn" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; font-size: 0.85rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.1)'" onmouseout="this.style.background='transparent'">Cerrar Sesión</button>
       </div>
     </div>
   </nav>
+
+  <!-- Sidebar Overlay -->
+  <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title"><span class="sidebar-brand-name">Marketing</span> <span class="sidebar-brand-number">360</span></div>
+      <button id="sidebarClose" class="sidebar-close" aria-label="Cerrar menú">×</button>
+    </div>
+    <ul class="sidebar-menu">
+      <li class="sidebar-menu-item">
+        <a href="/pdfs.html" class="sidebar-menu-link">
+          <span class="sidebar-menu-icon">📄</span>
+          <span>Subir documentos</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/rag.html" class="sidebar-menu-link">
+          <span class="sidebar-menu-icon">💬</span>
+          <span>Mi chat</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/metrics.html" class="sidebar-menu-link">
+          <span class="sidebar-menu-icon">📊</span>
+          <span>Métricas del sistema</span>
+        </a>
+      </li>
+    </ul>
+    <div class="sidebar-user">
+      Usuario: <span id="sidebarUserName"></span>
+    </div>
+  </aside>
 
   <div class="page-shell" style="margin-top: 60px;">
     <div class="card">
       <div class="top-bar">
         <div>
-          <h1>PDFs subidos</h1>
+          <h1>DOCs subidos</h1>
           <p class="subtitle">Gestiona y consulta los documentos que has cargado al sistema.</p>
         </div>
         <div class="top-right">
@@ -510,7 +892,7 @@
       </div>
 
       <div id="upload-area">
-        <p>Arrastra aquí un PDF o haz clic para buscarlo en tu ordenador.</p>
+        <p>Arrastra aquí tus docs o haz clic para buscarlo en tu dispositivo.</p>
         <div class="upload-actions">
           <input id="pdf-input" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp" style="display: none" />
           <button id="select-pdf-button" type="button">Seleccionar Documento</button>
@@ -544,6 +926,7 @@
           </tr>
         </tbody>
       </table>
+      <div class="pdfs-mobile-view" id="pdfs-mobile-view"></div>
     </div>
   </div>
 
@@ -579,6 +962,8 @@
 
   <script>
     let selectedPdfFile = null;
+    let lastUploadedPdfId = null; // Rastrear el último PDF subido
+    let lastProcessedPdfId = null; // Rastrear el último PDF procesado
 
     async function uploadPdfFile(file) {
       const statusEl = document.getElementById("upload-status");
@@ -633,8 +1018,24 @@
               statusEl.innerHTML = `Documento subido correctamente <span class="success-pulse">✓</span>`;
               uploadButtonLabel.textContent = "Subido";
 
+              // Guardar el ID del PDF subido
+              if (data.data && data.data.pdf && data.data.pdf._id) {
+                lastUploadedPdfId = data.data.pdf._id;
+                lastProcessedPdfId = null; // Resetear el procesado
+              }
+
               // limpiar selección
               selectedPdfFile = null;
+              // Desactivar "Subir Documento"
+              uploadButton.disabled = true;
+              uploadButton.style.opacity = "0.5";
+              uploadButton.style.cursor = "not-allowed";
+              // Mantener "Seleccionar Documento" inactivo
+              const selectPdfButton = document.getElementById("select-pdf-button");
+              selectPdfButton.disabled = true;
+              selectPdfButton.style.opacity = "0.5";
+              selectPdfButton.style.cursor = "not-allowed";
+              
               // recargar tabla
               await loadPdfs();
 
@@ -642,9 +1043,6 @@
               setTimeout(() => {
                 uploadButtonProgress.style.width = "0%";
                 uploadButtonLabel.textContent = "Subir Documento";
-                uploadButton.disabled = true;
-                uploadButton.style.opacity = "0.5";
-                uploadButton.style.cursor = "not-allowed";
               }, 1200);
             } else {
               throw new Error("Error al subir el PDF");
@@ -698,6 +1096,16 @@
 
         statusEl.innerHTML = `PDF procesado en ${data.chunks} chunks <span class="success-pulse">✓</span>`;
 
+        // Guardar el ID del PDF procesado
+        lastProcessedPdfId = pdfId;
+        // Desactivar todos los botones "Convertir a chunks"
+        const allChunkButtons = document.querySelectorAll(".chunk-row-button");
+        allChunkButtons.forEach(b => {
+          b.disabled = true;
+          b.style.opacity = "0.5";
+          b.style.cursor = "not-allowed";
+        });
+
         await loadPdfs();
 
         setTimeout(() => {
@@ -722,13 +1130,25 @@
 
       function setSelectedFile(file) {
         selectedPdfFile = file;
+        const selectPdfButton = document.getElementById("select-pdf-button");
+        
         if (file) {
           statusEl.textContent = `Seleccionado: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+          // Desactivar "Seleccionar Documento"
+          selectPdfButton.disabled = true;
+          selectPdfButton.style.opacity = "0.5";
+          selectPdfButton.style.cursor = "not-allowed";
+          // Activar "Subir Documento"
           uploadButton.disabled = false;
           uploadButton.style.opacity = "1";
           uploadButton.style.cursor = "pointer";
         } else {
           statusEl.textContent = "";
+          // Activar "Seleccionar Documento"
+          selectPdfButton.disabled = false;
+          selectPdfButton.style.opacity = "1";
+          selectPdfButton.style.cursor = "pointer";
+          // Desactivar "Subir Documento"
           uploadButton.disabled = true;
           uploadButton.style.opacity = "0.5";
           uploadButton.style.cursor = "not-allowed";
@@ -850,18 +1270,36 @@
 
     async function loadPdfs() {
       const tbody = document.getElementById("pdf-tbody");
-      tbody.innerHTML = "<tr><td colspan='5'>Cargando...</td></tr>";
+      const mobileView = document.getElementById('pdfs-mobile-view');
+      
+      if (tbody) {
+        tbody.innerHTML = "<tr><td colspan='5'>Cargando...</td></tr>";
+      }
+      if (mobileView) {
+        mobileView.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Cargando...</div>';
+      }
+      
       try {
         const res = await fetchWithAuth("/api/pdf");
         const data = await res.json();
 
         if (!data.ok) {
-          tbody.innerHTML = `<tr><td colspan="5">Error: ${data.message}</td></tr>`;
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="5">Error: ${data.message}</td></tr>`;
+          }
+          if (mobileView) {
+            mobileView.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--error);">Error: ${data.message}</div>`;
+          }
           return;
         }
 
         if (!data.data?.pdfs?.length) {
-          tbody.innerHTML = "<tr><td colspan='5'>No hay PDFs subidos aún.</td></tr>";
+          if (tbody) {
+            tbody.innerHTML = "<tr><td colspan='5'>No hay PDFs subidos aún.</td></tr>";
+          }
+          if (mobileView) {
+            mobileView.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">No hay PDFs subidos aún.</div>';
+          }
           return;
         }
 
@@ -878,6 +1316,12 @@
           const link = `/uploads/${pdf.fileName}`;
           
           const isProcessed = pdf.status === "processed";
+          const isLastUploaded = pdf._id === lastUploadedPdfId;
+          const isLastProcessed = pdf._id === lastProcessedPdfId;
+          // Solo activar "Convertir a chunks" si es el último subido y no está procesado
+          const shouldEnableChunk = isLastUploaded && !isProcessed && !lastProcessedPdfId;
+          // Solo activar "Enviar a Qdrant" si es el último procesado
+          const shouldEnableRag = isLastProcessed && isProcessed;
 
 tr.innerHTML = `
   <td>${pdf.originalName}</td>
@@ -889,9 +1333,9 @@ tr.innerHTML = `
     <button
       class="chunk-row-button"
       data-pdf-id="${pdf._id || ""}"
-      ${isProcessed
-        ? "disabled style='margin-left:6px;opacity:0.5;cursor:not-allowed;'"
-        : "style='margin-left:6px;'"}
+      ${shouldEnableChunk
+        ? "style='margin-left:6px;'"
+        : "disabled style='margin-left:6px;opacity:0.5;cursor:not-allowed;'"}
     >
       Convertir a chunks
     </button>
@@ -900,7 +1344,7 @@ tr.innerHTML = `
     <button
       class="rag-button"
       data-pdf-id="${pdf._id || ""}"
-      ${isProcessed
+      ${shouldEnableRag
         ? ""
         : "disabled style='opacity:0.5;cursor:not-allowed;'"}
     >
@@ -913,16 +1357,76 @@ tr.innerHTML = `
           tbody.appendChild(tr);
         });
 
-        // asociar eventos a los botones "Convertir a chunks" de cada fila
-        const chunkButtons = tbody.querySelectorAll(".chunk-row-button");
+        // Generar vista mobile
+        const mobileView = document.getElementById('pdfs-mobile-view');
+        if (mobileView) {
+          mobileView.innerHTML = '';
+          data.data.pdfs.forEach((pdf) => {
+            const card = document.createElement('div');
+            card.className = 'pdf-card';
+            
+            const sizeKb = (pdf.size / 1024).toFixed(1);
+            const createdAt = pdf.createdAt
+              ? new Date(pdf.createdAt).toLocaleString()
+              : "-";
+            const link = `/uploads/${pdf.fileName}`;
+            const isProcessed = pdf.status === "processed";
+            const isLastUploaded = pdf._id === lastUploadedPdfId;
+            const isLastProcessed = pdf._id === lastProcessedPdfId;
+            // Solo activar "Convertir a chunks" si es el último subido y no está procesado
+            const shouldEnableChunk = isLastUploaded && !isProcessed && !lastProcessedPdfId;
+            // Solo activar "Enviar a Qdrant" si es el último procesado
+            const shouldEnableRag = isLastProcessed && isProcessed;
+            
+            card.innerHTML = `
+              <div class="pdf-card-header">
+                <div class="pdf-card-name">${pdf.originalName}</div>
+                <div class="pdf-card-status">
+                  <span class="tag">${pdf.status || "uploaded"}</span>
+                </div>
+              </div>
+              <div class="pdf-card-info">
+                <div class="pdf-card-info-row">
+                  <span>Tamaño:</span>
+                  <span>${sizeKb} KB</span>
+                </div>
+                <div class="pdf-card-info-row">
+                  <span>Fecha:</span>
+                  <span>${createdAt}</span>
+                </div>
+              </div>
+              <div class="pdf-card-actions">
+                <button
+                  class="pdf-card-button chunk-row-button"
+                  data-pdf-id="${pdf._id || ""}"
+                  ${shouldEnableChunk ? "" : "disabled"}
+                >
+                  ${shouldEnableChunk ? "Convertir a chunks" : (isProcessed ? "✓ Procesado" : "Convertir a chunks")}
+                </button>
+                <button
+                  class="pdf-card-button rag-button"
+                  data-pdf-id="${pdf._id || ""}"
+                  ${shouldEnableRag ? "" : "disabled"}
+                >
+                  ${shouldEnableRag ? "Enviar a Qdrant" : (isProcessed ? "Enviar a Qdrant" : "⏳ Procesa primero")}
+                </button>
+              </div>
+            `;
+            
+            mobileView.appendChild(card);
+          });
+        }
+
+        // asociar eventos a los botones "Convertir a chunks" de cada fila (tanto en tabla como en cards)
+        const chunkButtons = document.querySelectorAll(".chunk-row-button");
         chunkButtons.forEach((btn) => {
           const pdfId = btn.getAttribute("data-pdf-id");
           if (!pdfId || btn.disabled) return;
           btn.addEventListener("click", () => processPdfFromRow(pdfId, btn));
         });
 
-       // asociar eventos a los botones "Enviar a Qdrant" (RAG)
-const ragButtons = tbody.querySelectorAll(".rag-button");
+       // asociar eventos a los botones "Enviar a Qdrant" (RAG) (tanto en tabla como en cards)
+const ragButtons = document.querySelectorAll(".rag-button");
 ragButtons.forEach((btn) => {
   const pdfId = btn.getAttribute("data-pdf-id");
   if (!pdfId || btn.disabled) return;
@@ -947,6 +1451,36 @@ ragButtons.forEach((btn) => {
 
       statusEl.innerHTML = `Embeddings generados (${data.inserted}) <span class="success-pulse">✓</span>`;
       btn.textContent = "Enviado ✓";
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      btn.style.cursor = "not-allowed";
+
+      // Desactivar todos los botones excepto "Seleccionar Documento"
+      const allChunkButtons = document.querySelectorAll(".chunk-row-button");
+      allChunkButtons.forEach(b => {
+        b.disabled = true;
+        b.style.opacity = "0.5";
+        b.style.cursor = "not-allowed";
+      });
+
+      const allRagButtons = document.querySelectorAll(".rag-button");
+      allRagButtons.forEach(b => {
+        b.disabled = true;
+        b.style.opacity = "0.5";
+        b.style.cursor = "not-allowed";
+      });
+
+      // Limpiar el rastreo
+      lastUploadedPdfId = null;
+      lastProcessedPdfId = null;
+
+      // Reactivar "Seleccionar Documento"
+      const selectPdfButton = document.getElementById("select-pdf-button");
+      if (selectPdfButton) {
+        selectPdfButton.disabled = false;
+        selectPdfButton.style.opacity = "1";
+        selectPdfButton.style.cursor = "pointer";
+      }
 
       // refrescar listado para ver cambios de estado
       await loadPdfs();
@@ -968,7 +1502,13 @@ ragButtons.forEach((btn) => {
 
       } catch (err) {
         console.error(err);
-        tbody.innerHTML = "<tr><td colspan='5'>Error al cargar la lista.</td></tr>";
+        const mobileView = document.getElementById('pdfs-mobile-view');
+        if (tbody) {
+          tbody.innerHTML = "<tr><td colspan='5'>Error al cargar la lista.</td></tr>";
+        }
+        if (mobileView) {
+          mobileView.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--error);">Error al cargar la lista.</div>';
+        }
       }
     }
 
@@ -980,6 +1520,98 @@ ragButtons.forEach((btn) => {
     document.addEventListener("DOMContentLoaded", () => {
       setupUploadArea();
       loadPdfs();
+      
+      // Estado inicial: solo "Seleccionar Documento" activo
+      const selectPdfButton = document.getElementById("select-pdf-button");
+      const uploadButton = document.getElementById("upload-button");
+      if (selectPdfButton) {
+        selectPdfButton.disabled = false;
+        selectPdfButton.style.opacity = "1";
+        selectPdfButton.style.cursor = "pointer";
+      }
+      if (uploadButton) {
+        uploadButton.disabled = true;
+        uploadButton.style.opacity = "0.5";
+        uploadButton.style.cursor = "not-allowed";
+      }
+    });
+
+    // Sidebar functionality
+    document.addEventListener('DOMContentLoaded', () => {
+      const menuToggle = document.getElementById('menuToggle');
+      const sidebar = document.getElementById('sidebar');
+      const sidebarOverlay = document.getElementById('sidebarOverlay');
+      const sidebarClose = document.getElementById('sidebarClose');
+      const sidebarUserName = document.getElementById('sidebarUserName');
+      const navUserName = document.getElementById('navUserName');
+
+      // Sincronizar nombre de usuario en sidebar
+      if (navUserName && sidebarUserName) {
+        const updateSidebarUser = () => {
+          sidebarUserName.textContent = navUserName.textContent;
+        };
+        updateSidebarUser();
+        // Observar cambios en el nombre de usuario
+        const observer = new MutationObserver(updateSidebarUser);
+        observer.observe(navUserName, { childList: true, subtree: true });
+      }
+
+      // Marcar página activa según la URL actual
+      const currentPath = window.location.pathname;
+      const sidebarLinks = sidebar.querySelectorAll('.sidebar-menu-link');
+      sidebarLinks.forEach(link => {
+        const linkPath = new URL(link.href).pathname;
+        if (linkPath === currentPath) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+
+      function openSidebar() {
+        sidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        sidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+
+      // Abrir sidebar
+      if (menuToggle) {
+        menuToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openSidebar();
+        });
+      }
+
+      // Cerrar sidebar
+      if (sidebarClose) {
+        sidebarClose.addEventListener('click', closeSidebar);
+      }
+
+      // Cerrar al hacer click en overlay
+      if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+      }
+
+      // Cerrar al hacer click en un link del menú
+      sidebarLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          // Pequeño delay para que se vea la navegación
+          setTimeout(closeSidebar, 100);
+        });
+      });
+
+      // Cerrar con ESC
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+          closeSidebar();
+        }
+      });
     });
   </script>
 </body>

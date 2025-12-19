@@ -78,6 +78,7 @@
     .header-actions {
       display: flex;
       gap: 12px;
+      flex-wrap: wrap;
     }
 
     button {
@@ -262,6 +263,10 @@
     }
 
     @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+
       .charts-grid {
         grid-template-columns: 1fr;
       }
@@ -269,26 +274,267 @@
       header {
         flex-direction: column;
         gap: 16px;
+        padding: 16px;
+      }
+
+      .header-actions {
+        flex-wrap: wrap;
+        width: 100%;
+      }
+
+      .header-actions button {
+        flex: 1 1 auto;
+        min-width: 120px;
+        font-size: 0.85rem;
+        padding: 8px 16px;
+      }
+
+      .metrics-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .chart-container {
+        height: 250px;
+      }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      body {
+        padding: 16px;
+      }
+
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Sidebar Menu */
+    .menu-icon {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+      color: var(--accent);
+      font-size: 20px;
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .menu-icon:hover {
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1500;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      backdrop-filter: blur(4px);
+    }
+
+    .sidebar-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      width: 280px;
+      background: var(--card-bg);
+      border-right: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+      z-index: 1501;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .sidebar.active {
+      transform: translateX(0);
+    }
+
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .sidebar-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .sidebar-brand-name {
+      background: linear-gradient(120deg, #e5e7eb, #c4b5fd, #38bdf8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .sidebar-brand-number {
+      color: #f59e0b;
+      font-weight: 700;
+      text-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(245, 158, 11, 0.4);
+    }
+
+    .sidebar-close {
+      cursor: pointer;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      color: var(--text-muted);
+      transition: background 0.2s ease, color 0.2s ease;
+      font-size: 20px;
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .sidebar-close:hover {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-main);
+    }
+
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar-menu-item {
+      margin-bottom: 8px;
+    }
+
+    .sidebar-menu-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      color: var(--text-main);
+      text-decoration: none;
+      transition: background 0.2s ease, transform 0.1s ease;
+      font-size: 14px;
+    }
+
+    .sidebar-menu-link:hover {
+      background: rgba(56, 189, 248, 0.1);
+      transform: translateX(4px);
+    }
+
+    .sidebar-menu-link.active {
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.2), rgba(56, 189, 248, 0.1));
+      border-radius: 10px;
+      transform: translateX(2px);
+    }
+
+    .sidebar-menu-icon {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+    }
+
+    .sidebar-user {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 640px) {
+      .sidebar {
+        width: 260px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
+  <!-- Navbar -->
+  <nav style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding: 10px 16px;">
+    <div style="max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <button id="menuToggle" class="menu-icon" aria-label="Abrir menú">
+          ☰
+        </button>
+        <span style="color: var(--text-muted);">|</span>
+        <span id="navUserName" style="color: var(--text-main); font-size: 0.85rem;"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <button id="logoutBtn" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; font-size: 0.85rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(56, 189, 248, 0.1)'" onmouseout="this.style.background='transparent'">Cerrar Sesión</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Sidebar Overlay -->
+  <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title"><span class="sidebar-brand-name">Marketing</span> <span class="sidebar-brand-number">360</span></div>
+      <button id="sidebarClose" class="sidebar-close" aria-label="Cerrar menú">×</button>
+    </div>
+    <ul class="sidebar-menu">
+      <li class="sidebar-menu-item">
+        <a href="/pdfs.html" class="sidebar-menu-link">
+          <span class="sidebar-menu-icon">📄</span>
+          <span>Subir documentos</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/rag.html" class="sidebar-menu-link">
+          <span class="sidebar-menu-icon">💬</span>
+          <span>Mi chat</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/metrics.html" class="sidebar-menu-link">
+          <span class="sidebar-menu-icon">📊</span>
+          <span>Métricas del sistema</span>
+        </a>
+      </li>
+    </ul>
+    <div class="sidebar-user">
+      Usuario: <span id="sidebarUserName"></span>
+    </div>
+  </aside>
+
+  <div class="container" style="margin-top: 60px;">
     <header>
       <div style="display: flex; align-items: center; gap: 16px;">
         <h1>
           <span class="status-indicator" id="statusIndicator"></span>
           Dashboard de Métricas
         </h1>
-        <span style="color: var(--text-muted);">|</span>
-        <span id="navUserName" style="color: var(--text-main); font-size: 0.9rem;"></span>
       </div>
       <div class="header-actions">
         <button id="exportBtn">Exportar CSV</button>
         <button id="exportJsonBtn">Exportar JSON</button>
         <button id="homeBtn">Inicio</button>
-        <button id="logoutBtn" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">Cerrar Sesión</button>
       </div>
     </header>
 
@@ -738,6 +984,84 @@
       // Event listener para botón Inicio
       document.getElementById('homeBtn').addEventListener('click', () => {
         window.location.href = '/index.html';
+      });
+    });
+
+    // Sidebar functionality
+    document.addEventListener('DOMContentLoaded', () => {
+      const menuToggle = document.getElementById('menuToggle');
+      const sidebar = document.getElementById('sidebar');
+      const sidebarOverlay = document.getElementById('sidebarOverlay');
+      const sidebarClose = document.getElementById('sidebarClose');
+      const sidebarUserName = document.getElementById('sidebarUserName');
+      const navUserName = document.getElementById('navUserName');
+
+      // Sincronizar nombre de usuario en sidebar
+      if (navUserName && sidebarUserName) {
+        const updateSidebarUser = () => {
+          sidebarUserName.textContent = navUserName.textContent;
+        };
+        updateSidebarUser();
+        // Observar cambios en el nombre de usuario
+        const observer = new MutationObserver(updateSidebarUser);
+        observer.observe(navUserName, { childList: true, subtree: true });
+      }
+
+      // Marcar página activa según la URL actual
+      const currentPath = window.location.pathname;
+      const sidebarLinks = sidebar.querySelectorAll('.sidebar-menu-link');
+      sidebarLinks.forEach(link => {
+        const linkPath = new URL(link.href).pathname;
+        if (linkPath === currentPath) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+
+      function openSidebar() {
+        sidebar.classList.add('active');
+        sidebarOverlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        sidebar.classList.remove('active');
+        sidebarOverlay.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+
+      // Abrir sidebar
+      if (menuToggle) {
+        menuToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openSidebar();
+        });
+      }
+
+      // Cerrar sidebar
+      if (sidebarClose) {
+        sidebarClose.addEventListener('click', closeSidebar);
+      }
+
+      // Cerrar al hacer click en overlay
+      if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+      }
+
+      // Cerrar al hacer click en un link del menú
+      sidebarLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          // Pequeño delay para que se vea la navegación
+          setTimeout(closeSidebar, 100);
+        });
+      });
+
+      // Cerrar con ESC
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('active')) {
+          closeSidebar();
+        }
       });
     });
   </script>
