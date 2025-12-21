@@ -11,8 +11,6 @@ services:
   redis-rag:
     image: redis:7-alpine
     container_name: redis-rag
-    ports:
-      - "6380:6379"
     networks:
       - vector-rag-network
 
@@ -35,13 +33,13 @@ services:
       - .env
     environment:
       PORT: 3000
-      # DESARROLLO: Usa DB_URL del .env (MongoDB Atlas)
-      # Si DB_URL no está en .env, usa el MongoDB del contenedor como fallback
-      # PRODUCCIÓN: mongodb://mongo-rag:27017/vector-db-rag
       DB_URL: ${DB_URL:-mongodb://mongo-rag:27017/vector-db-rag}
       QDRANT_URL: http://qdrant-rag:6333
       REDIS_URL: redis://redis-rag:6379
+
+      # ✅ vector-rag -> ford-mailer
       CAMPAIGN_SERVICE_URL: ${CAMPAIGN_SERVICE_URL:-http://api:3000}
+
     volumes:
       - ./uploads:/app/uploads
     depends_on:
@@ -49,14 +47,18 @@ services:
       - redis-rag
       - qdrant-rag
     networks:
-      vector-rag-network:
-        aliases:
-          - vector-rag
+      - vector-rag-network
+      - ford-mailer_default   # ✅ red externa, para resolver "api"
+ 
 
 networks:
   vector-rag-network:
     name: vector-rag-network
     external: true
+
+  ford-mailer_default:
+    external: true
+    name: ford-mailer_ford-mailer_default   # 👈 ESTE es el nombre REAL que te mostró `docker network ls`
 
 volumes:
   mongo_rag_db:
