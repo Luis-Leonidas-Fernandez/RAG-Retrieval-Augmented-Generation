@@ -2,6 +2,7 @@ services:
   mongo-rag:
     image: mongo:7
     container_name: mongo-rag
+    restart: unless-stopped
     networks:
       - vector-rag-network
     volumes:
@@ -11,14 +12,17 @@ services:
   redis-rag:
     image: redis:7-alpine
     container_name: redis-rag
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_rag_data:/data
     networks:
       - vector-rag-network
 
   qdrant-rag:
     image: qdrant/qdrant
     container_name: qdrant-rag
-    ports:
-      - "6333:6333"
+    restart: unless-stopped
     volumes:
       - ./qdrant_data:/qdrant/storage
     networks:
@@ -27,6 +31,8 @@ services:
   app:
     build: .
     container_name: vector-rag-app
+    command: ["npm", "run", "start"]
+    restart: unless-stopped
     ports:
       - "3002:3000"
     env_file:
@@ -38,7 +44,7 @@ services:
       REDIS_URL: redis://redis-rag:6379
 
       # ✅ vector-rag -> ford-mailer
-      CAMPAIGN_SERVICE_URL: ${CAMPAIGN_SERVICE_URL:-http://api:3000}
+      CAMPAIGN_SERVICE_URL: ${CAMPAIGN_SERVICE_URL:-http://ford-mailer-api:3000}
 
     volumes:
       - ./uploads:/app/uploads
@@ -63,3 +69,4 @@ networks:
 volumes:
   mongo_rag_db:
   mongo_rag_config:
+  redis_rag_data:
