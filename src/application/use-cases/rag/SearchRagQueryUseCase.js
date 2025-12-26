@@ -265,29 +265,7 @@ export class SearchRagQueryUseCase {
               const maxCampaigns = 2; // 2 campañas por semana para EMAIL y WHATSAPP
               const channelText = channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP';
               
-              // Obtener el conteo real de campañas esta semana
-              let campaignCount = 0;
-              if (this.campaignFilterService) {
-                try {
-                  const now = new Date();
-                  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                  const { CampaignSentModel } = await import('../../../infrastructure/db/models/campaign-sent.model.js');
-                  const campaignsThisWeek = await CampaignSentModel.distinct("campaignId", {
-                    tenantId: tenantId,
-                    channel: channel,
-                    sentAt: { $gte: oneWeekAgo },
-                    campaignId: { $ne: null },
-                  });
-                  campaignCount = campaignsThisWeek.length;
-                } catch (error) {
-                  console.error('[RAG] Error al obtener conteo de campañas:', error);
-                  campaignCount = maxCampaigns; // Usar el máximo como fallback
-                }
-              } else {
-                campaignCount = maxCampaigns; // Fallback si no hay servicio
-              }
-              
-              const answer = `Límite de campañas alcanzado\n\nHas alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channelText} por semana. Ya has creado ${campaignCount} esta semana. Intenta nuevamente la próxima semana.`;
+              const answer = `Límite de campañas alcanzado\n\nHas alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channelText} por semana. Todos los clientes elegibles ya han recibido el máximo de campañas permitidas esta semana. Intenta nuevamente la próxima semana.`;
               
               // Obtener o crear conversación activa para guardar el mensaje
               let activeConversationId = conversationId;
@@ -433,25 +411,7 @@ export class SearchRagQueryUseCase {
           const maxCampaigns = 2; // 2 campañas por semana para EMAIL y WHATSAPP
           const channelText = channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP';
           
-          // Obtener el conteo real de campañas esta semana
-          let campaignCount = 0;
-          try {
-            const now = new Date();
-            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            const { CampaignSentModel } = await import('../../../infrastructure/db/models/campaign-sent.model.js');
-            const campaignsThisWeek = await CampaignSentModel.distinct("campaignId", {
-              tenantId: tenantId,
-              channel: channel,
-              sentAt: { $gte: oneWeekAgo },
-              campaignId: { $ne: null },
-            });
-            campaignCount = campaignsThisWeek.length;
-          } catch (error) {
-            console.error('[RAG] Error al obtener conteo de campañas:', error);
-            campaignCount = maxCampaigns;
-          }
-          
-          const answer = `Límite de campañas alcanzado\n\nHas alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channelText} por semana. Ya has creado ${campaignCount} esta semana. Intenta nuevamente la próxima semana.`;
+          const answer = `Límite de campañas alcanzado\n\nHas alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channelText} por semana. Todos los clientes elegibles ya han recibido el máximo de campañas permitidas esta semana. Intenta nuevamente la próxima semana.`;
           
           // Obtener o crear conversación activa
           let activeConversationId = conversationId;
