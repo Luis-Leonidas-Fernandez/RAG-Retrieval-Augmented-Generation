@@ -117,36 +117,10 @@ export class CampaignController {
         payloadSizeBytes: payloadSize,
       });
 
-      // 4.5. Validar límite de campañas por semana ANTES de crear la campaña
-      const canales = payload.canales || segment.canalesOrigen || ["email"];
-      const hasWhatsApp = canales.some(c => c.toLowerCase().includes('whatsapp') || c.toLowerCase().includes('wa'));
-      const channel = hasWhatsApp ? 'WHATSAPP' : 'EMAIL';
-      
-      // Consultar directamente el modelo para contar campañas únicas esta semana
-      const now = new Date();
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      
-      const campaignsThisWeek = await CampaignSentModel.distinct("campaignId", {
-        tenantId: tenantId,
-        channel: channel,
-        sentAt: { $gte: oneWeekAgo },
-        campaignId: { $ne: null }, // Solo contar campañas con ID válido
-      });
-      
-      const campaignCount = campaignsThisWeek.length;
-      const maxCampaigns = 2; // 2 campañas por semana para EMAIL y WHATSAPP
-      
-      if (campaignCount >= maxCampaigns) {
-        console.warn(`[CampaignController] ⚠️ Límite de campañas alcanzado: ${campaignCount}/${maxCampaigns} esta semana`);
-        return res.status(429).json(
-          createResponse(
-            false,
-            `Has alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channel} por semana. Ya has creado ${campaignCount} esta semana. Intenta nuevamente la próxima semana.`
-          )
-        );
-      }
-
-      console.log(`[CampaignController] ✅ Límite de campañas OK: ${campaignCount}/${maxCampaigns} esta semana`);
+      // 4.5. NOTA: La validación de límite de campañas por tenant se eliminó.
+      // El límite es por cliente individual (cada cliente puede recibir hasta 2 campañas por semana).
+      // El filtrado de clientes en SearchRagQueryUseCase ya asegura que solo se muestren clientes
+      // que tienen menos de 2 campañas, por lo que no es necesario validar un límite global por tenant.
 
       // 5. Llamar al segundo backend
       console.log("[CampaignController] 📞 Llamando al servicio de campañas...");
