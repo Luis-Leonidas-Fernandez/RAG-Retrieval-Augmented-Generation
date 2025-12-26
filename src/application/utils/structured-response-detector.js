@@ -43,3 +43,61 @@ export function needsStructuredResponse(question) {
   return tienePlural || tienePalabraClave;
 }
 
+/**
+ * Detecta si una pregunta solicita clientes para campañas
+ * @param {string} question - La pregunta del usuario
+ * @returns {Object} { isCampaign: boolean, channel: 'EMAIL' | 'WHATSAPP' | null }
+ */
+export function isCampaignRequest(question) {
+  if (!question || typeof question !== 'string') {
+    return { isCampaign: false, channel: null };
+  }
+  
+  const q = question.toLowerCase().trim();
+  
+  // Keywords para email
+  const emailKeywords = ['email', 'correo', 'campaña.*email', 'email.*campaña', 'correo.*campaña', 'campaña.*correo'];
+  
+  // Keywords para WhatsApp
+  const whatsappKeywords = ['whatsapp', 'wa', 'campaña.*whatsapp', 'whatsapp.*campaña', 'campaña.*wa', 'wa.*campaña'];
+  
+  // Keywords que indican exclusión (clientes que aún no tienen)
+  const exclusionKeywords = ['no.*tienen', 'aún.*no', 'sin.*campaña', 'que.*aún', 'que.*todavía', 'aun.*no', 'todavia'];
+  
+  // Verificar si tiene keywords de exclusión
+  const hasExclusion = exclusionKeywords.some(kw => {
+    const regex = new RegExp(kw, 'i');
+    return regex.test(q);
+  });
+  
+  // Verificar si menciona email
+  const isEmail = emailKeywords.some(kw => {
+    const regex = new RegExp(kw, 'i');
+    return regex.test(q);
+  });
+  
+  // Verificar si menciona WhatsApp
+  const isWhatsApp = whatsappKeywords.some(kw => {
+    const regex = new RegExp(kw, 'i');
+    return regex.test(q);
+  });
+  
+  // Si tiene exclusión y menciona un canal específico
+  if (hasExclusion && (isEmail || isWhatsApp)) {
+    return {
+      isCampaign: true,
+      channel: isEmail ? 'EMAIL' : (isWhatsApp ? 'WHATSAPP' : null),
+    };
+  }
+  
+  // Si menciona campaña y un canal, también puede ser solicitud de campaña
+  if ((isEmail || isWhatsApp) && q.includes('campaña')) {
+    return {
+      isCampaign: true,
+      channel: isEmail ? 'EMAIL' : (isWhatsApp ? 'WHATSAPP' : null),
+    };
+  }
+  
+  return { isCampaign: false, channel: null };
+}
+

@@ -2,6 +2,7 @@ import { createResponse } from "../../../infrastructure/http/utils/response.js";
 import { CampaignServiceWrapper } from "../../../infrastructure/services/adapters/campaign-service-wrapper.service.js";
 import { SegmentRepositoryMongo } from "../../../infrastructure/db/repositories/SegmentRepositoryMongo.js";
 import { TenantRepositoryMongo } from "../../../infrastructure/db/repositories/TenantRepositoryMongo.js";
+import { CampaignFilterService } from "../../../infrastructure/services/core/campaign-filter.service.js";
 import { getTenantBrandName } from "../../../domain/utils/tenant-helpers.js";
 
 /**
@@ -13,6 +14,7 @@ export class CampaignController {
     this.campaignService = new CampaignServiceWrapper();
     this.segmentRepository = new SegmentRepositoryMongo();
     this.tenantRepository = new TenantRepositoryMongo();
+    this.campaignFilterService = new CampaignFilterService();
   }
 
   /**
@@ -140,6 +142,36 @@ export class CampaignController {
         estado: result.data?.estado,
         tiempoTotal: `${callElapsed}ms`,
       });
+
+      // 6. (Opcional) Registrar envíos de campaña para tracking
+      if (result.ok && result.data?.campaignId && segment?.clientes && Array.isArray(segment.clientes)) {
+        try {
+          const emails = segment.clientes
+            .map(c => c.email)
+            .filter(email => email && email.trim());
+          
+          if (emails.length > 0) {
+            // Determinar canal desde payload.canales
+            const canales = payload.canales || segment.canalesOrigen || ["email"];
+            const hasWhatsApp = canales.some(c => c.toLowerCase().includes('whatsapp') || c.toLowerCase().includes('wa'));
+            const channel = hasWhatsApp ? 'WHATSAPP' : 'EMAIL';
+            
+            // Registrar envíos (pre-registro cuando se crea la campaña)
+            // Nota: Esto puede hacerse cuando realmente se envían, pero pre-registramos aquí para tracking
+            await this.campaignFilterService.recordCampaignsSent(
+              tenantId,
+              emails,
+              channel,
+              result.data.campaignId
+            );
+            
+            console.log(`[CampaignController] ✅ Registrados ${emails.length} envíos de campaña (${channel})`);
+          }
+        } catch (error) {
+          // No fallar la respuesta si el registro de envíos falla
+          console.error("[CampaignController] ⚠️ Error al registrar envíos de campaña:", error.message);
+        }
+      }
 
       return res.status(201).json(
         createResponse(true, result.message || "Campaña creada e iniciada correctamente", {

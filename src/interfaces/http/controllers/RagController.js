@@ -13,6 +13,7 @@ import { CacheService } from "../../../infrastructure/services/adapters/cache-wr
 import { ConversationSummaryService } from "../../../infrastructure/services/adapters/conversation-summary-wrapper.service.js";
 import { ExportStorageService } from "../../../infrastructure/services/adapters/export-storage.service.js";
 import { ExcelGeneratorService } from "../../../infrastructure/services/core/excel-generator.service.js";
+import { CampaignFilterService } from "../../../infrastructure/services/core/campaign-filter.service.js";
 import { createResponse } from "../../../infrastructure/http/utils/response.js";
 import { normalizeTocContent } from "../../../application/utils/toc-normalizer.js";
 
@@ -37,6 +38,7 @@ export class RagController {
     this.extractStructuredDataUseCase = new ExtractStructuredDataUseCase(this.chunkRepository);
     this.exportStorageService = new ExportStorageService();
     this.excelGeneratorService = new ExcelGeneratorService();
+    this.campaignFilterService = new CampaignFilterService();
 
     // Configuración RAG desde variables de entorno
     const ragConfig = {
@@ -67,7 +69,8 @@ export class RagController {
       this.conversationSummaryService,
       ragConfig,
       this.extractStructuredDataUseCase,
-      this.exportStorageService
+      this.exportStorageService,
+      this.campaignFilterService
     );
     this.getPdfIndexUseCase = new GetDocIndexUseCase(this.chunkRepository);
   }

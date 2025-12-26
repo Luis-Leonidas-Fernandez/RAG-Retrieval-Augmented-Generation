@@ -2,7 +2,7 @@ import { RagQueryResponse } from "../../dtos/RagQueryResponse.js";
 import { estimateTokens, truncateToTokens, truncateMessages, calculateTokenCost } from "../../utils/token-utils.js";
 import { normalizeName } from "../../utils/text-utils.js";
 import { extractNameEmailPairs, extractNameEmailVehiclePairs } from "../../utils/extract-pairs.js";
-import { needsStructuredResponse } from "../../utils/structured-response-detector.js";
+import { needsStructuredResponse, isCampaignRequest } from "../../utils/structured-response-detector.js";
 import { ExtractStructuredDataUseCase } from "./ExtractStructuredDataUseCase.js";
 import { ExportStorageService } from "../../../infrastructure/services/adapters/export-storage.service.js";
 import { v4 as uuidv4 } from "uuid";
@@ -24,7 +24,8 @@ export class SearchRagQueryUseCase {
     conversationSummaryService,
     config = {},
     extractStructuredDataUseCase = null,
-    exportStorageService = null
+    exportStorageService = null,
+    campaignFilterService = null
   ) {
     this.pdfRepository = pdfRepository;
     this.chunkRepository = chunkRepository;
@@ -39,6 +40,7 @@ export class SearchRagQueryUseCase {
     // Nuevos servicios para datos estructurados
     this.extractStructuredDataUseCase = extractStructuredDataUseCase || new ExtractStructuredDataUseCase(chunkRepository);
     this.exportStorageService = exportStorageService || new ExportStorageService();
+    this.campaignFilterService = campaignFilterService;
     
     // Configuración inyectada (valores por defecto si no se proporciona)
     this.config = {
@@ -197,7 +199,83 @@ export class SearchRagQueryUseCase {
           }
         }
 
-        // 2.1. Construir candidato de segmento a partir de TODOS los registros tabulares
+        // 2.1. Aplicar filtrado de campañas si es necesario
+        let filteredData = structuredDataFull;
+        let filteredTotalRows = totalRows;
+
+        // Detectar si la pregunta solicita clientes para campañas
+        const campaignRequest = isCampaignRequest(question);
+        
+        if (campaignRequest.isCampaign && this.campaignFilterService && structuredDataFull.length > 0) {
+          console.log(`[RAG] Detectada solicitud de campaña: ${campaignRequest.channel}`);
+          
+          // Preparar clientes para filtrado
+          const clientesForFilter = structuredDataFull.map(item => ({
+            email: item.email || "",
+            name: item.name || "",
+            vehicle: item.vehicle || "",
+            phone: item.phone || "",
+          }));
+
+          try {
+            if (campaignRequest.channel === 'EMAIL') {
+              console.log(`[RAG] Filtrando clientes elegibles para campaña EMAIL`);
+              const eligible = await this.campaignFilterService.filterEligibleForEmail(
+                tenantId,
+                clientesForFilter,
+                200 // límite máximo
+              );
+              
+              // Mapear de vuelta al formato original
+              filteredData = eligible.map(cliente => ({
+                name: cliente.name || cliente.email,
+                email: cliente.email,
+                vehicle: cliente.vehicle || "",
+                phone: cliente.phone || "",
+              }));
+              
+              filteredTotalRows = filteredData.length;
+              console.log(`[RAG] De ${structuredDataFull.length} clientes, ${filteredData.length} son elegibles para email`);
+            } else if (campaignRequest.channel === 'WHATSAPP') {
+              console.log(`[RAG] Filtrando clientes elegibles para campaña WHATSAPP`);
+              const eligible = await this.campaignFilterService.filterEligibleForWhatsApp(
+                tenantId,
+                clientesForFilter,
+                200 // límite máximo
+              );
+              
+              // Mapear de vuelta al formato original
+              filteredData = eligible.map(cliente => ({
+                name: cliente.name || cliente.email,
+                email: cliente.email,
+                vehicle: cliente.vehicle || "",
+                phone: cliente.phone || "",
+              }));
+              
+              filteredTotalRows = filteredData.length;
+              console.log(`[RAG] De ${structuredDataFull.length} clientes, ${filteredData.length} son elegibles para WhatsApp`);
+            }
+            
+            // Asegurar que esté entre 100-200 clientes
+            if (filteredData.length > 200) {
+              filteredData = filteredData.slice(0, 200);
+              filteredTotalRows = 200;
+              console.log(`[RAG] Limitado a 200 clientes (truncado)`);
+            }
+            
+            if (filteredData.length < 100 && structuredDataFull.length >= 100) {
+              console.log(`[RAG] Advertencia: Solo ${filteredData.length} clientes elegibles (menos de 100)`);
+            }
+            
+            // Actualizar structuredDataFull con los datos filtrados
+            structuredDataFull = filteredData;
+          } catch (error) {
+            console.error(`[RAG] Error al filtrar clientes para campaña:`, error);
+            // En caso de error, continuar con los datos originales
+          }
+        }
+
+        // 2.2. Construir candidato de segmento a partir de los registros (filtrados o no)
         let segmentCandidate = null;
 
         const clientes = structuredDataFull
@@ -224,18 +302,24 @@ export class SearchRagQueryUseCase {
           };
         }
 
-        // 3. Generar respuesta amigable con LLM (usando solo resumen, NO structuredDataFull completo)
-        const prompt = `El usuario pregunta: "${question}"
+        // 3. Generar respuesta directa y concisa (sin información innecesaria)
+        // Usar filteredTotalRows si se aplicó filtrado, sino usar totalRows original
+        const finalTotalRows = filteredTotalRows || totalRows;
         
+        const prompt = `El usuario pregunta: "${question}"
+
 ${summaryText}
 
-Genera una respuesta amigable y descriptiva basada en estos datos REALES. IMPORTANTE: 
+Genera una respuesta DIRECTA y CONCISA basada en estos datos. IMPORTANTE: 
+- NO menciones nombres específicos repetidos, top valores, o estadísticas innecesarias
 - NO generes tablas en markdown (formato | Columna | ... |)
 - NO uses formato de tabla con pipes o guiones
-- Solo genera texto descriptivo (párrafos, listas simples si es necesario)
-- Describe el resumen, los top valores y la cantidad total
-- No inventes datos, solo describe lo que encontré
-- Menciona que encontré ${totalRows} registros en total y que abajo el sistema mostrará una tabla con las primeras filas y un botón para descargar el Excel completo.`;
+- Solo menciona el TOTAL de registros encontrados
+- Responde ÚNICAMENTE con este formato exacto (sin agregar nada más):
+
+"He encontrado un total de ${finalTotalRows} ${finalTotalRows === 1 ? 'registro' : 'registros'} de clientes. Con ellos ya puedes iniciar una campaña. A continuación, se mostrará una tabla con los registros encontrados y habrá un botón para descargar el archivo Excel completo con la información."
+
+NO agregues información adicional, nombres, estadísticas, ni explicaciones extra.`;
 
         const completion = await this.llmService.generateCompletion(prompt, llmModel);
         const answer = completion.answer;
@@ -364,7 +448,7 @@ Genera una respuesta amigable y descriptiva basada en estos datos REALES. IMPORT
           tokens: usage,
           structuredData,
           structuredDataFull, // Solo uso interno
-          totalRows,
+          totalRows: finalTotalRows, // Usar el total filtrado si se aplicó filtrado
           dataType: 'table',
           exportId,
           // Opcional: solo presente cuando hay clientes duplicados
