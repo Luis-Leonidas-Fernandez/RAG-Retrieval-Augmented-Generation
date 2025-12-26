@@ -44,16 +44,30 @@ export async function loadExcelChunks(filePath, sourceFile) {
 
   // Extraer headers de la primera fila
   const headerRow = firstWorksheet.getRow(1);
+  if (!headerRow) {
+    throw new Error("El archivo Excel no contiene una fila de encabezados válida");
+  }
+
   const headers = [];
-  headerRow.eachCell({ includeEmpty: false }, (cell) => {
-    const value = cell.value;
-    if (value != null) {
-      headers.push(String(value));
-    }
-  });
+  // Verificar que la fila tenga celdas antes de iterar
+  if (headerRow.cellCount > 0) {
+    headerRow.eachCell({ includeEmpty: false }, (cell) => {
+      const value = cell.value;
+      if (value != null && value !== undefined) {
+        headers.push(String(value));
+      }
+    });
+  }
+
+  // Validar que se encontraron headers antes de validar
+  if (headers.length === 0) {
+    throw new Error("El archivo Excel no contiene columnas en la primera fila. Asegúrate de que la primera fila contenga los encabezados: Cliente, Email, Telefono");
+  }
 
   // Validar columnas usando el servicio de dominio
   console.log(`[ExcelLoader] 🔍 Validando columnas requeridas...`);
+  console.log(`[ExcelLoader]   Headers encontrados: ${headers.join(", ")}`);
+  
   try {
     ExcelColumnValidator.validate(headers);
     console.log(`[ExcelLoader] ✅ Validación de columnas exitosa`);
