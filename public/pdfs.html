@@ -1142,6 +1142,88 @@
       },
     };
 
+    // Sistema de modal de confirmación personalizado
+    let confirmModalResolve = null;
+
+    window.showConfirmModal = function(message) {
+      return new Promise((resolve) => {
+        confirmModalResolve = resolve;
+        const overlay = document.getElementById('confirm-modal-overlay');
+        const messageEl = document.getElementById('confirm-modal-message');
+        
+        if (!overlay || !messageEl) {
+          // Fallback a confirm nativo si el modal no está disponible
+          resolve(confirm(message));
+          return;
+        }
+        
+        messageEl.textContent = message;
+        overlay.classList.add('active');
+
+        // Prevenir scroll del body cuando el modal está abierto
+        document.body.style.overflow = 'hidden';
+      });
+    };
+
+    window.hideConfirmModal = function() {
+      const overlay = document.getElementById('confirm-modal-overlay');
+      if (overlay) {
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    };
+
+    // Configurar event listeners del modal cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', () => {
+      const cancelBtn = document.getElementById('confirm-modal-cancel');
+      const confirmBtn = document.getElementById('confirm-modal-confirm');
+      const overlay = document.getElementById('confirm-modal-overlay');
+
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          if (confirmModalResolve) {
+            confirmModalResolve(false);
+            confirmModalResolve = null;
+          }
+          window.hideConfirmModal();
+        });
+      }
+
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+          if (confirmModalResolve) {
+            confirmModalResolve(true);
+            confirmModalResolve = null;
+          }
+          window.hideConfirmModal();
+        });
+      }
+
+      // Cerrar modal al hacer clic en el overlay (fuera del modal)
+      if (overlay) {
+        overlay.addEventListener('click', (e) => {
+          if (e.target.id === 'confirm-modal-overlay') {
+            if (confirmModalResolve) {
+              confirmModalResolve(false);
+              confirmModalResolve = null;
+            }
+            window.hideConfirmModal();
+          }
+        });
+      }
+
+      // Cerrar modal con tecla Escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay && overlay.classList.contains('active')) {
+          if (confirmModalResolve) {
+            confirmModalResolve(false);
+            confirmModalResolve = null;
+          }
+          window.hideConfirmModal();
+        }
+      });
+    });
+
     let selectedPdfFile = null;
     let lastUploadedPdfId = null; // Rastrear el último PDF subido
     let lastProcessedPdfId = null; // Rastrear el último PDF procesado
@@ -1329,7 +1411,7 @@
         return;
       }
 
-      const confirmDelete = await showConfirmModal(
+      const confirmDelete = await window.showConfirmModal(
         "¿Estás seguro de que deseas eliminar este documento?\n\n" +
         "Esta acción eliminará el documento de las bases de datos.\n\n" +
         "Esta acción NO se puede deshacer."
@@ -1908,70 +1990,6 @@ ragButtons.forEach((btn) => {
     </div>
   </div>
 
-  <script>
-    // Sistema de modal de confirmación personalizado
-    let confirmModalResolve = null;
-
-    function showConfirmModal(message) {
-      return new Promise((resolve) => {
-        confirmModalResolve = resolve;
-        const overlay = document.getElementById('confirm-modal-overlay');
-        const messageEl = document.getElementById('confirm-modal-message');
-        
-        messageEl.textContent = message;
-        overlay.classList.add('active');
-
-        // Prevenir scroll del body cuando el modal está abierto
-        document.body.style.overflow = 'hidden';
-      });
-    }
-
-    function hideConfirmModal() {
-      const overlay = document.getElementById('confirm-modal-overlay');
-      overlay.classList.remove('active');
-      document.body.style.overflow = '';
-    }
-
-    // Event listeners para los botones del modal
-    document.getElementById('confirm-modal-cancel').addEventListener('click', () => {
-      if (confirmModalResolve) {
-        confirmModalResolve(false);
-        confirmModalResolve = null;
-      }
-      hideConfirmModal();
-    });
-
-    document.getElementById('confirm-modal-confirm').addEventListener('click', () => {
-      if (confirmModalResolve) {
-        confirmModalResolve(true);
-        confirmModalResolve = null;
-      }
-      hideConfirmModal();
-    });
-
-    // Cerrar modal al hacer clic en el overlay (fuera del modal)
-    document.getElementById('confirm-modal-overlay').addEventListener('click', (e) => {
-      if (e.target.id === 'confirm-modal-overlay') {
-        if (confirmModalResolve) {
-          confirmModalResolve(false);
-          confirmModalResolve = null;
-        }
-        hideConfirmModal();
-      }
-    });
-
-    // Cerrar modal con tecla Escape
-    document.addEventListener('keydown', (e) => {
-      const overlay = document.getElementById('confirm-modal-overlay');
-      if (e.key === 'Escape' && overlay.classList.contains('active')) {
-        if (confirmModalResolve) {
-          confirmModalResolve(false);
-          confirmModalResolve = null;
-        }
-        hideConfirmModal();
-      }
-    });
-  </script>
 </body>
 </html>
 
