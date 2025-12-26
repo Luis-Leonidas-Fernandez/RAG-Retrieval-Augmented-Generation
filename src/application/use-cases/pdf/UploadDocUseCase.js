@@ -1,3 +1,7 @@
+import { isExcelFile } from "../../../ingestion/excel_loader.js";
+import { ExcelColumnValidator } from "../../../domain/services/ExcelColumnValidator.js";
+import ExcelJS from "exceljs";
+
 /**
  * Caso de uso para subir un documento
  * Orquesta la lógica de negocio del proceso de subida de documento
@@ -48,6 +52,55 @@ export class UploadDocUseCase {
 
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       throw new Error(`Tipo de archivo no permitido: ${file.mimetype}`);
+    }
+
+    // Validar columnas de Excel ANTES de guardar en BD
+    if (isExcelFile(file.mimetype, file.originalname)) {
+      console.log(`[UploadDocUseCase] 📊 Validando columnas de Excel antes de subir: ${file.originalname}`);
+      
+      try {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(file.path);
+        
+        const firstWorksheet = workbook.worksheets[0];
+        if (!firstWorksheet) {
+          throw new Error("El archivo Excel no contiene hojas válidas");
+        }
+
+        const headerRow = firstWorksheet.getRow(1);
+        if (!headerRow) {
+          throw new Error("El archivo Excel no contiene una fila de encabezados válida");
+        }
+
+        const headers = [];
+        if (headerRow.cellCount > 0) {
+          headerRow.eachCell({ includeEmpty: false }, (cell) => {
+            const value = cell.value;
+            if (value != null && value !== undefined) {
+              headers.push(String(value));
+            }
+          });
+        }
+
+        if (headers.length === 0) {
+          throw new Error("El archivo Excel no contiene columnas en la primera fila. Asegúrate de que la primera fila contenga los encabezados: Cliente, Email, Telefono");
+        }
+
+        // Validar columnas usando el servicio de dominio
+        console.log(`[UploadDocUseCase] 🔍 Validando columnas requeridas...`);
+        console.log(`[UploadDocUseCase]   Headers encontrados: ${headers.join(", ")}`);
+        
+        ExcelColumnValidator.validate(headers);
+        console.log(`[UploadDocUseCase] ✅ Validación de columnas exitosa`);
+      } catch (error) {
+        console.error(`[UploadDocUseCase] ❌ Error de validación de columnas: ${error.message}`);
+        // Si es una excepción de validación de columnas, lanzarla directamente
+        // Si es otro error (archivo corrupto, etc.), lanzar error genérico
+        if (error.name === "InvalidExcelColumnsException" || error.message.includes("columnas obligatorias")) {
+          throw error;
+        }
+        throw new Error(`Error al validar el archivo Excel: ${error.message}`);
+      }
     }
 
     // Construir datos del documento
