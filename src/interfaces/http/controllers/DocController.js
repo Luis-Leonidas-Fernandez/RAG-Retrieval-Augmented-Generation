@@ -3,6 +3,7 @@ import { ListDocsUseCase } from "../../../application/use-cases/pdf/ListDocsUseC
 import { ProcessDocUseCase } from "../../../application/use-cases/pdf/ProcessDocUseCase.js";
 import { EmbedDocChunksUseCase } from "../../../application/use-cases/pdf/EmbedDocChunksUseCase.js";
 import { GetDocIndexUseCase } from "../../../application/use-cases/pdf/GetDocIndexUseCase.js";
+import { HardDeleteDocUseCase } from "../../../application/use-cases/pdf/HardDeleteDocUseCase.js";
 import { DocRepositoryMongo } from "../../../infrastructure/db/repositories/DocRepositoryMongo.js";
 import { ChunkRepositoryMongo } from "../../../infrastructure/db/repositories/ChunkRepositoryMongo.js";
 import { QdrantVectorRepository } from "../../../infrastructure/vector-store/QdrantVectorRepository.js";
@@ -50,6 +51,12 @@ export class DocController {
       qdrantBatchSize
     );
     this.getPdfIndexUseCase = new GetDocIndexUseCase(this.chunkRepository);
+    this.hardDeleteDocUseCase = new HardDeleteDocUseCase(
+      this.pdfRepository,
+      this.chunkRepository,
+      this.vectorRepository,
+      this.cacheService
+    );
   }
 
   /**
@@ -248,6 +255,49 @@ export class DocController {
         ok: false,
         message: error.message || "Error al obtener el índice del documento",
       });
+    }
+  }
+
+  /**
+   * Maneja el endpoint de eliminar documento
+   * @param {Object} req - Request object de Express
+   * @param {Object} res - Response object de Express
+   */
+  async deletePdf(req, res) {
+    const { tenantId } = req.user;
+    const { id: pdfId } = req.params;
+
+    try {
+      const pdf = await this.pdfRepository.findById(tenantId, pdfId);
+      
+      if (!pdf) {
+        return res.status(404).json(
+          createResponse(false, "Documento no encontrado")
+        );
+      }
+
+      await this.hardDeleteDocUseCase.execute({
+        tenantId,
+        pdfId,
+        userId: req.user.id,
+      });
+
+      if (pdf.path) {
+        try {
+          await deletePdfFile(pdf.path);
+        } catch (fileError) {
+          console.error("[PDF Controller] Error al eliminar archivo físico:", fileError);
+        }
+      }
+
+      return res.status(200).json(
+        createResponse(true, "Documento eliminado correctamente")
+      );
+    } catch (error) {
+      console.error("[PDF Controller] Error al eliminar documento:", error);
+      return res.status(400).json(
+        createResponse(false, error.message || "Error al eliminar el documento")
+      );
     }
   }
 }

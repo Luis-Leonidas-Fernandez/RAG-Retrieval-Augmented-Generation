@@ -58,7 +58,13 @@ router.get("/:id/index",
   pdfController.getPdfIndex.bind(pdfController)
 );
 
-
+// DELETE /api/pdf/:id - Eliminar documento y todos sus datos
+router.delete("/:id",
+  authenticateToken,
+  generalUserRateLimit,
+  validateIdParam("id"),
+  pdfController.deletePdf.bind(pdfController)
+);
 
 export default router;
 

@@ -918,6 +918,7 @@
             <th>Fecha</th>
             <th>Ver</th>
             <th>Rag</th>
+            <th>Eliminar</th>
           </tr>
         </thead>
         <tbody id="pdf-tbody">
@@ -1193,6 +1194,58 @@
       }
     }
 
+    async function deletePdfFromRow(pdfId, button) {
+      const statusEl = document.getElementById("upload-status");
+      
+      if (!pdfId) {
+        statusEl.textContent = "No se encontró el ID del PDF para eliminar.";
+        return;
+      }
+
+      const confirmDelete = confirm(
+        "¿Estás seguro de que deseas eliminar este documento?\n\n" +
+        "Esta acción eliminará:\n" +
+        "- El documento de la base de datos\n" +
+        "- Todos los chunks asociados\n" +
+        "- Todos los vectores en Qdrant\n" +
+        "- El archivo físico\n\n" +
+        "Esta acción NO se puede deshacer."
+      );
+
+      if (!confirmDelete) return;
+
+      try {
+        button.disabled = true;
+        button.textContent = "Eliminando...";
+        button.style.opacity = "0.7";
+        button.style.cursor = "wait";
+        statusEl.textContent = "Eliminando documento y todos sus datos...";
+
+        const res = await fetchWithAuth(`/api/pdf/${pdfId}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.message || "Error al eliminar el documento");
+        }
+
+        statusEl.innerHTML = `Documento eliminado correctamente <span class="success-pulse">✓</span>`;
+        
+        setTimeout(async () => {
+          await loadPdfs();
+          statusEl.textContent = "";
+        }, 1500);
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error al eliminar el documento: " + err.message;
+        button.disabled = false;
+        button.textContent = "Eliminar";
+        button.style.opacity = "1";
+        button.style.cursor = "pointer";
+      }
+    }
+
     function setupUploadArea() {
       const uploadArea = document.getElementById("upload-area");
       const fileInput = document.getElementById("pdf-input");
@@ -1423,6 +1476,18 @@ tr.innerHTML = `
       Enviar a Qdrant
     </button>
   </td>
+  <td>
+    ${pdf.status === "ready" 
+      ? `<button
+          class="delete-pdf-button"
+          data-pdf-id="${pdf._id || ""}"
+          style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;"
+        >
+          Eliminar
+        </button>`
+      : '<span style="color: var(--text-muted); font-size: 11px;">-</span>'
+    }
+  </td>
 `;
 
 
@@ -1482,6 +1547,16 @@ tr.innerHTML = `
                 >
                   ${shouldEnableRag ? "Enviar a Qdrant" : (isProcessed ? "Enviar a Qdrant" : "⏳ Procesa primero")}
                 </button>
+                ${pdf.status === "ready" 
+                  ? `<button
+                      class="pdf-card-button delete-pdf-button"
+                      data-pdf-id="${pdf._id || ""}"
+                      style="background: #ef4444; color: white; border: 1px solid #ef4444; margin-top: 8px;"
+                    >
+                      Eliminar
+                    </button>`
+                  : ""
+                }
               </div>
             `;
             
@@ -1571,6 +1646,13 @@ ragButtons.forEach((btn) => {
   });
 });
 
+      // Asociar eventos a los botones "Eliminar"
+      const deleteButtons = document.querySelectorAll(".delete-pdf-button");
+      deleteButtons.forEach((btn) => {
+        const pdfId = btn.getAttribute("data-pdf-id");
+        if (!pdfId) return;
+        btn.addEventListener("click", () => deletePdfFromRow(pdfId, btn));
+      });
 
       } catch (err) {
         console.error(err);
