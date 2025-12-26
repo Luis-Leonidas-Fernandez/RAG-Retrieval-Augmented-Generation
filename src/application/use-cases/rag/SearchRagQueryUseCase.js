@@ -414,7 +414,143 @@ export class SearchRagQueryUseCase {
           } catch (error) {
             console.error(`[RAG] Error al filtrar clientes para campaña:`, error);
             // En caso de error, continuar con los datos originales
+            // Pero resetear filteredTotalRows para indicar que el filtrado falló
+            filteredTotalRows = totalRows;
           }
+        }
+
+        // 2.1.1. Verificación adicional: Si se aplicó filtrado y no hay clientes elegibles, retornar mensaje de límite
+        // Verificar tanto filteredTotalRows como structuredDataFull.length después del filtrado
+        const hasNoEligibleClients = campaignRequest.isCampaign && 
+          ((filteredTotalRows === 0 && totalRows > 0) || 
+           (structuredDataFull.length === 0 && totalRows > 0));
+        
+        if (hasNoEligibleClients) {
+          console.log(`[RAG] Verificación adicional: No hay clientes elegibles después del filtrado (filteredTotalRows=${filteredTotalRows}, structuredDataFull.length=${structuredDataFull.length}, totalRows=${totalRows})`);
+          
+          // Construir mensaje de límite alcanzado
+          const channel = campaignRequest.channel || 'EMAIL';
+          const maxCampaigns = channel === 'EMAIL' ? 2 : 1;
+          const channelText = channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP';
+          
+          // Obtener el conteo real de campañas esta semana
+          let campaignCount = 0;
+          try {
+            const now = new Date();
+            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const { CampaignSentModel } = await import('../../../infrastructure/db/models/campaign-sent.model.js');
+            const campaignsThisWeek = await CampaignSentModel.distinct("campaignId", {
+              tenantId: tenantId,
+              channel: channel,
+              sentAt: { $gte: oneWeekAgo },
+              campaignId: { $ne: null },
+            });
+            campaignCount = campaignsThisWeek.length;
+          } catch (error) {
+            console.error('[RAG] Error al obtener conteo de campañas:', error);
+            campaignCount = maxCampaigns;
+          }
+          
+          const answer = `Límite de campañas alcanzado\n\nHas alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channelText} por semana. Ya has creado ${campaignCount} esta semana. Intenta nuevamente la próxima semana.`;
+          
+          // Obtener o crear conversación activa
+          let activeConversationId = conversationId;
+          if (!activeConversationId) {
+            let conversation = await this.conversationRepository.findActive(tenantId, userId, pdfId);
+            if (!conversation) {
+              try {
+                conversation = await this.conversationRepository.create(tenantId, {
+                  userId,
+                  pdfId,
+                  title: question.substring(0, 50).trim() || "Nueva conversación",
+                  isActive: true,
+                  contextWindowSize: 10,
+                  messageCount: 0,
+                });
+              } catch (error) {
+                if (error.code === 11000) {
+                  conversation = await this.conversationRepository.findActive(tenantId, userId, pdfId);
+                }
+              }
+            }
+            if (conversation?._id) {
+              activeConversationId = typeof conversation._id === 'string' ? conversation._id : conversation._id.toString();
+            } else if (conversation?.id) {
+              activeConversationId = typeof conversation.id === 'string' ? conversation.id : conversation.id.toString();
+            }
+          }
+
+          // Guardar mensajes en conversación
+          if (activeConversationId) {
+            const conversation = await this.conversationRepository.findById(tenantId, activeConversationId);
+            if (conversation) {
+              const updateData = {
+                $inc: { messageCount: 1 },
+                $set: { lastMessageAt: new Date() },
+              };
+
+              if (conversation.messageCount === 0) {
+                const title = question.substring(0, 50).trim() || "Nueva conversación";
+                updateData.$set.title = title;
+              }
+
+              const updatedConv = await this.conversationRepository.update(tenantId, activeConversationId, updateData);
+              if (updatedConv) {
+                const userIndex = updatedConv.messageCount - 1;
+
+                await this.messageRepository.create(tenantId, activeConversationId, {
+                  role: "user",
+                  content: question,
+                  index: userIndex,
+                  metadata: {
+                    pdfId,
+                    tokens: {
+                      prompt_tokens: estimateTokens(question),
+                      completion_tokens: 0,
+                      total_tokens: estimateTokens(question),
+                    },
+                  },
+                });
+
+                await this.conversationRepository.update(tenantId, activeConversationId, {
+                  $inc: { messageCount: 1 },
+                  $set: { lastMessageAt: new Date() },
+                });
+
+                const assistantIndex = userIndex + 1;
+                await this.messageRepository.create(tenantId, activeConversationId, {
+                  role: "assistant",
+                  content: answer,
+                  index: assistantIndex,
+                  metadata: {
+                    pdfId,
+                    tokens: {
+                      prompt_tokens: 0,
+                      completion_tokens: estimateTokens(answer),
+                      total_tokens: estimateTokens(answer),
+                    },
+                  },
+                });
+              }
+            }
+          }
+
+          return new RagQueryResponse({
+            answer: answer,
+            context: [],
+            conversationId: activeConversationId,
+            tokens: {
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0,
+            },
+            structuredData: null,
+            structuredDataFull: null,
+            totalRows: 0,
+            dataType: 'text',
+            exportId: null,
+            segmentCandidate: null,
+          });
         }
 
         // 2.2. Construir candidato de segmento a partir de los registros (filtrados o no)
