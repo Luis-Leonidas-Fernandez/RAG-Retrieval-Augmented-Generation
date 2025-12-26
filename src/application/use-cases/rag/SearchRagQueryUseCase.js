@@ -256,6 +256,120 @@ export class SearchRagQueryUseCase {
               console.log(`[RAG] De ${structuredDataFull.length} clientes, ${filteredData.length} son elegibles para WhatsApp`);
             }
             
+            // Si no hay clientes elegibles después del filtrado, retornar respuesta especial
+            if (filteredData.length === 0) {
+              console.log(`[RAG] No hay clientes elegibles: todos tienen 2+ campañas esta semana`);
+              
+              // Obtener o crear conversación activa para guardar el mensaje
+              let activeConversationId = conversationId;
+              if (!activeConversationId) {
+                let conversation = await this.conversationRepository.findActive(tenantId, userId, pdfId);
+                
+                if (!conversation) {
+                  try {
+                    conversation = await this.conversationRepository.create(tenantId, {
+                      userId,
+                      pdfId,
+                      title: question.substring(0, 50).trim() || "Nueva conversación",
+                      isActive: true,
+                      contextWindowSize: 10,
+                      messageCount: 0,
+                    });
+                  } catch (error) {
+                    if (error.code === 11000) {
+                      conversation = await this.conversationRepository.findActive(tenantId, userId, pdfId);
+                      if (!conversation) {
+                        throw error;
+                      }
+                    } else {
+                      throw error;
+                    }
+                  }
+                }
+                
+                if (conversation._id) {
+                  activeConversationId = typeof conversation._id === 'string' ? conversation._id : conversation._id.toString();
+                } else if (conversation.id) {
+                  activeConversationId = typeof conversation.id === 'string' ? conversation.id : conversation.id.toString();
+                }
+              }
+
+              // Guardar mensajes en conversación
+              if (activeConversationId) {
+                const conversation = await this.conversationRepository.findById(tenantId, activeConversationId);
+                if (conversation) {
+                  const updateData = {
+                    $inc: { messageCount: 1 },
+                    $set: { lastMessageAt: new Date() },
+                  };
+
+                  if (conversation.messageCount === 0) {
+                    const title = question.substring(0, 50).trim() || "Nueva conversación";
+                    updateData.$set.title = title;
+                  }
+
+                  const updatedConv = await this.conversationRepository.update(tenantId, activeConversationId, updateData);
+                  if (updatedConv) {
+                    const userIndex = updatedConv.messageCount - 1;
+
+                    await this.messageRepository.create(tenantId, activeConversationId, {
+                      role: "user",
+                      content: question,
+                      index: userIndex,
+                      metadata: {
+                        pdfId,
+                        tokens: {
+                          prompt_tokens: estimateTokens(question),
+                          completion_tokens: 0,
+                          total_tokens: estimateTokens(question),
+                        },
+                      },
+                    });
+
+                    await this.conversationRepository.update(tenantId, activeConversationId, {
+                      $inc: { messageCount: 1 },
+                      $set: { lastMessageAt: new Date() },
+                    });
+
+                    const assistantIndex = userIndex + 1;
+                    const answer = "Todos los clientes tienen 2 campañas ya creadas esta semana, han alcanzado el límite.";
+
+                    await this.messageRepository.create(tenantId, activeConversationId, {
+                      role: "assistant",
+                      content: answer,
+                      index: assistantIndex,
+                      metadata: {
+                        pdfId,
+                        tokens: {
+                          prompt_tokens: 0,
+                          completion_tokens: estimateTokens(answer),
+                          total_tokens: estimateTokens(answer),
+                        },
+                      },
+                    });
+                  }
+                }
+              }
+
+              // Retornar respuesta sin datos estructurados ni segmentCandidate
+              return new RagQueryResponse({
+                answer: "Todos los clientes tienen 2 campañas ya creadas esta semana, han alcanzado el límite.",
+                context: [],
+                conversationId: activeConversationId,
+                tokens: {
+                  prompt_tokens: 0,
+                  completion_tokens: 0,
+                  total_tokens: 0,
+                },
+                structuredData: null, // Sin datos estructurados
+                structuredDataFull: null,
+                totalRows: 0,
+                dataType: 'text',
+                exportId: null,
+                segmentCandidate: null, // Sin segmentCandidate para que no aparezcan los botones
+              });
+            }
+            
             // Asegurar que esté entre 100-200 clientes
             if (filteredData.length > 200) {
               filteredData = filteredData.slice(0, 200);

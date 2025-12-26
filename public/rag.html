@@ -1668,7 +1668,12 @@
       // Actualizar candidato de segmento si existe
       currentSegmentCandidate = responseData.segmentCandidate || null;
 
-      if (currentSegmentCandidate) {
+      // Solo mostrar botones si hay clientes en el segmentCandidate
+      const hasClients = currentSegmentCandidate && 
+                        Array.isArray(currentSegmentCandidate.clientes) && 
+                        currentSegmentCandidate.clientes.length > 0;
+
+      if (currentSegmentCandidate && hasClients) {
         // Normalizar array de imágenes: si viene solo imageUrlPromo, crear un array con esa primera imagen
         if (!Array.isArray(currentSegmentCandidate.imageUrlsPromo)) {
           const firstImage = currentSegmentCandidate.imageUrlPromo && currentSegmentCandidate.imageUrlPromo.trim()
