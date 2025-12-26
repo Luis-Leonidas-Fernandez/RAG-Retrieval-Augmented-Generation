@@ -62,7 +62,7 @@ export function isCampaignRequest(question) {
   const whatsappKeywords = ['whatsapp', 'wa', 'campaña.*whatsapp', 'whatsapp.*campaña', 'campaña.*wa', 'wa.*campaña'];
   
   // Keywords que indican exclusión (clientes que aún no tienen)
-  const exclusionKeywords = ['no.*tienen', 'aún.*no', 'sin.*campaña', 'que.*aún', 'que.*todavía', 'aun.*no', 'todavia'];
+  const exclusionKeywords = ['no.*tienen', 'aún.*no', 'sin.*campaña', 'que.*aún', 'que.*todavía', 'aun.*no', 'todavia', 'no.*tengan', 'que.*no.*tengan'];
   
   // Verificar si tiene keywords de exclusión
   const hasExclusion = exclusionKeywords.some(kw => {
@@ -95,6 +95,14 @@ export function isCampaignRequest(question) {
     return {
       isCampaign: true,
       channel: isEmail ? 'EMAIL' : (isWhatsApp ? 'WHATSAPP' : null),
+    };
+  }
+  
+  // NUEVO: Si tiene exclusión y menciona "campaña" pero no especifica canal, asumir EMAIL por defecto
+  if (hasExclusion && q.includes('campaña') && !isEmail && !isWhatsApp) {
+    return {
+      isCampaign: true,
+      channel: 'EMAIL', // Por defecto EMAIL si no se especifica
     };
   }
   
