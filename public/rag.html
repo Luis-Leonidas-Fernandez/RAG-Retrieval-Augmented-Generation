@@ -612,6 +612,12 @@
       margin-top: 8px;
       font-size: 12px;
       color: var(--text-muted);
+      min-height: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .segment-status-message:empty {
+      display: none;
     }
 
     /* Modal para subir imagen de segmento */
@@ -2134,8 +2140,62 @@
           } catch (err) {
             console.error('Error al crear campaña:', err);
             if (segmentStatusEl) {
-              segmentStatusEl.textContent = 'Error al crear campaña: ' + err.message;
-              segmentStatusEl.style.color = '#ef4444';
+              // Crear un mensaje de error más visual y formateado
+              const errorMessage = err.message || 'Error al crear campaña';
+              
+              // Detectar si es un error de límite de campañas
+              const isLimitError = errorMessage.includes('límite') || errorMessage.includes('alcanzado');
+              
+              if (isLimitError) {
+                // Formato especial para errores de límite
+                segmentStatusEl.innerHTML = `
+                  <div style="
+                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(220, 38, 38, 0.1));
+                    border: 1px solid rgba(239, 68, 68, 0.3);
+                    border-radius: 12px;
+                    padding: 16px;
+                    margin-top: 12px;
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 12px;
+                    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+                  ">
+                    <div style="
+                      font-size: 24px;
+                      line-height: 1;
+                      flex-shrink: 0;
+                    ">⚠️</div>
+                    <div style="flex: 1;">
+                      <div style="
+                        font-weight: 600;
+                        font-size: 14px;
+                        color: #fca5a5;
+                        margin-bottom: 6px;
+                      ">Límite de campañas alcanzado</div>
+                      <div style="
+                        font-size: 13px;
+                        color: var(--text-muted);
+                        line-height: 1.5;
+                      ">${errorMessage}</div>
+                    </div>
+                  </div>
+                `;
+              } else {
+                // Formato estándar para otros errores
+                segmentStatusEl.innerHTML = `
+                  <div style="
+                    background: rgba(239, 68, 68, 0.1);
+                    border: 1px solid rgba(239, 68, 68, 0.3);
+                    border-radius: 8px;
+                    padding: 12px;
+                    margin-top: 12px;
+                    color: #fca5a5;
+                    font-size: 13px;
+                  ">
+                    <strong>Error:</strong> ${errorMessage}
+                  </div>
+                `;
+              }
             }
             createCampaignBtn.disabled = false;
             createCampaignBtn.textContent = '🚀 Crear campaña';
