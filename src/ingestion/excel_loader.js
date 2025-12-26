@@ -1,5 +1,6 @@
 import path from "path";
 import ExcelJS from "exceljs";
+import { ExcelColumnValidator } from "../domain/services/ExcelColumnValidator.js";
 
 /**
  * Determina si un archivo es Excel por mimetype o extensión.
@@ -35,6 +36,32 @@ export async function loadExcelChunks(filePath, sourceFile) {
   const loadTime = Date.now() - startTime;
   console.log(`[ExcelLoader] ✅ Archivo Excel cargado en ${loadTime}ms`);
   
+  // Validar columnas en la primera hoja antes de procesar
+  const firstWorksheet = workbook.worksheets[0];
+  if (!firstWorksheet) {
+    throw new Error("El archivo Excel no contiene hojas válidas");
+  }
+
+  // Extraer headers de la primera fila
+  const headerRow = firstWorksheet.getRow(1);
+  const headers = [];
+  headerRow.eachCell({ includeEmpty: false }, (cell) => {
+    const value = cell.value;
+    if (value != null) {
+      headers.push(String(value));
+    }
+  });
+
+  // Validar columnas usando el servicio de dominio
+  console.log(`[ExcelLoader] 🔍 Validando columnas requeridas...`);
+  try {
+    ExcelColumnValidator.validate(headers);
+    console.log(`[ExcelLoader] ✅ Validación de columnas exitosa`);
+  } catch (error) {
+    console.error(`[ExcelLoader] ❌ Error de validación: ${error.message}`);
+    throw error; // Propagar la excepción
+  }
+  
   const chunks = [];
   let totalSheets = 0;
   let totalRows = 0;
@@ -46,7 +73,16 @@ export async function loadExcelChunks(filePath, sourceFile) {
     let sheetRows = 0;
     console.log(`[ExcelLoader] 📄 Procesando hoja: "${sheetName}"`);
 
+    // Flag para saltar la primera fila (header) solo en la primera hoja
+    const isFirstSheet = totalSheets === 1;
+    let isFirstRow = isFirstSheet;
+
     worksheet.eachRow((row, rowNumber) => {
+      // Saltar la primera fila (header) en la primera hoja
+      if (isFirstRow && rowNumber === 1) {
+        isFirstRow = false;
+        return;
+      }
       totalRows++;
       // row.values es un array tipo [ , col1, col2, ... ]
       const cells = row.values

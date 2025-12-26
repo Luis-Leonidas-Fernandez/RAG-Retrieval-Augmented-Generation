@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import * as pdfParseModule from "pdf-parse";
 import { isExcelFile, loadExcelChunks } from "../../../ingestion/excel_loader.js";
+import { InvalidExcelColumnsException } from "../../../domain/exceptions/InvalidExcelColumnsException.js";
 
 // Compatibilidad con distintas formas de export de pdf-parse (CJS/ESM)
 const pdfParse =
@@ -135,6 +136,16 @@ export class DocProcessService {
         chunks: normalized,
       };
     } catch (error) {
+      // Manejar específicamente excepciones de validación de columnas
+      if (error instanceof InvalidExcelColumnsException) {
+        console.error(`[DocProcessService] ❌ Error de validación de columnas: ${error.message}`);
+        return {
+          success: false,
+          error: error.message,
+        };
+      }
+
+      // Otros errores
       console.error("[DocProcessService] Error al procesar documento:", error);
       return {
         success: false,
