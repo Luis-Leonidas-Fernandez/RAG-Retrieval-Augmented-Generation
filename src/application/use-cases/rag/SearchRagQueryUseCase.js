@@ -260,6 +260,35 @@ export class SearchRagQueryUseCase {
             if (filteredData.length === 0) {
               console.log(`[RAG] No hay clientes elegibles: todos tienen 2+ campañas esta semana`);
               
+              // Construir mensaje de límite alcanzado
+              const channel = campaignRequest.channel || 'EMAIL';
+              const maxCampaigns = channel === 'EMAIL' ? 2 : 1;
+              const channelText = channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP';
+              
+              // Obtener el conteo real de campañas esta semana
+              let campaignCount = 0;
+              if (this.campaignFilterService) {
+                try {
+                  const now = new Date();
+                  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  const { CampaignSentModel } = await import('../../../infrastructure/db/models/campaign-sent.model.js');
+                  const campaignsThisWeek = await CampaignSentModel.distinct("campaignId", {
+                    tenantId: tenantId,
+                    channel: channel,
+                    sentAt: { $gte: oneWeekAgo },
+                    campaignId: { $ne: null },
+                  });
+                  campaignCount = campaignsThisWeek.length;
+                } catch (error) {
+                  console.error('[RAG] Error al obtener conteo de campañas:', error);
+                  campaignCount = maxCampaigns; // Usar el máximo como fallback
+                }
+              } else {
+                campaignCount = maxCampaigns; // Fallback si no hay servicio
+              }
+              
+              const answer = `Límite de campañas alcanzado\n\nHas alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channelText} por semana. Ya has creado ${campaignCount} esta semana. Intenta nuevamente la próxima semana.`;
+              
               // Obtener o crear conversación activa para guardar el mensaje
               let activeConversationId = conversationId;
               if (!activeConversationId) {
@@ -332,8 +361,7 @@ export class SearchRagQueryUseCase {
                     });
 
                     const assistantIndex = userIndex + 1;
-                    const answer = "Todos los clientes tienen 2 campañas ya creadas esta semana, han alcanzado el límite.";
-
+                    // Usar el mismo mensaje construido arriba
                     await this.messageRepository.create(tenantId, activeConversationId, {
                       role: "assistant",
                       content: answer,
@@ -353,7 +381,7 @@ export class SearchRagQueryUseCase {
 
               // Retornar respuesta sin datos estructurados ni segmentCandidate
               return new RagQueryResponse({
-                answer: "Todos los clientes tienen 2 campañas ya creadas esta semana, han alcanzado el límite.",
+                answer: answer, // Usar el mensaje construido arriba
                 context: [],
                 conversationId: activeConversationId,
                 tokens: {
