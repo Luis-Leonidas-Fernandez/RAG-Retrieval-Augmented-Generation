@@ -262,7 +262,7 @@ export class SearchRagQueryUseCase {
               
               // Construir mensaje de límite alcanzado
               const channel = campaignRequest.channel || 'EMAIL';
-              const maxCampaigns = channel === 'EMAIL' ? 2 : 1;
+              const maxCampaigns = 2; // 2 campañas por semana para EMAIL y WHATSAPP
               const channelText = channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP';
               
               // Obtener el conteo real de campañas esta semana
@@ -430,7 +430,7 @@ export class SearchRagQueryUseCase {
           
           // Construir mensaje de límite alcanzado
           const channel = campaignRequest.channel || 'EMAIL';
-          const maxCampaigns = channel === 'EMAIL' ? 2 : 1;
+          const maxCampaigns = 2; // 2 campañas por semana para EMAIL y WHATSAPP
           const channelText = channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP';
           
           // Obtener el conteo real de campañas esta semana

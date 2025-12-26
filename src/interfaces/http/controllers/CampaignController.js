@@ -134,7 +134,7 @@ export class CampaignController {
       });
       
       const campaignCount = campaignsThisWeek.length;
-      const maxCampaigns = channel === "EMAIL" ? 2 : 1; // 2 emails/semana, 1 WhatsApp/semana
+      const maxCampaigns = 2; // 2 campañas por semana para EMAIL y WHATSAPP
       
       if (campaignCount >= maxCampaigns) {
         console.warn(`[CampaignController] ⚠️ Límite de campañas alcanzado: ${campaignCount}/${maxCampaigns} esta semana`);
