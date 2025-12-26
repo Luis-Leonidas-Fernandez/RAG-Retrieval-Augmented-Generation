@@ -815,6 +815,133 @@
       color: transparent;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+
+    /* Modal de confirmación personalizado */
+    .confirm-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .confirm-modal-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+
+    .confirm-modal {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: var(--shadow-soft);
+      transform: scale(0.95);
+      transition: transform 0.2s ease;
+      position: relative;
+    }
+
+    .confirm-modal-overlay.active .confirm-modal {
+      transform: scale(1);
+    }
+
+    .confirm-modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .confirm-modal-title::before {
+      content: "⚠️";
+      font-size: 1.5rem;
+    }
+
+    .confirm-modal-message {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 24px;
+      white-space: pre-line;
+    }
+
+    .confirm-modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .confirm-modal-button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+
+    .confirm-modal-button-cancel {
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-main);
+      border-color: var(--card-border);
+    }
+
+    .confirm-modal-button-cancel:hover {
+      background: rgba(15, 23, 42, 1);
+      border-color: var(--accent);
+    }
+
+    .confirm-modal-button-confirm {
+      background: #ef4444;
+      color: white;
+      border-color: #ef4444;
+    }
+
+    .confirm-modal-button-confirm:hover {
+      background: #dc2626;
+      border-color: #dc2626;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    @media (max-width: 640px) {
+      .confirm-modal {
+        padding: 20px;
+        max-width: 100%;
+        margin: 0;
+      }
+
+      .confirm-modal-title {
+        font-size: 1.1rem;
+      }
+
+      .confirm-modal-message {
+        font-size: 0.9rem;
+      }
+
+      .confirm-modal-actions {
+        flex-direction: column-reverse;
+        gap: 10px;
+      }
+
+      .confirm-modal-button {
+        width: 100%;
+        padding: 12px 20px;
+        font-size: 1rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1202,13 +1329,9 @@
         return;
       }
 
-      const confirmDelete = confirm(
+      const confirmDelete = await showConfirmModal(
         "¿Estás seguro de que deseas eliminar este documento?\n\n" +
-        "Esta acción eliminará:\n" +
-        "- El documento de la base de datos\n" +
-        "- Todos los chunks asociados\n" +
-        "- Todos los vectores en Qdrant\n" +
-        "- El archivo físico\n\n" +
+        "Esta acción eliminará el documento de las bases de datos.\n\n" +
         "Esta acción NO se puede deshacer."
       );
 
@@ -1766,6 +1889,87 @@ ragButtons.forEach((btn) => {
           closeSidebar();
         }
       });
+    });
+  </script>
+
+  <!-- Modal de confirmación personalizado -->
+  <div id="confirm-modal-overlay" class="confirm-modal-overlay">
+    <div class="confirm-modal">
+      <div class="confirm-modal-title">Confirmar eliminación</div>
+      <div class="confirm-modal-message" id="confirm-modal-message"></div>
+      <div class="confirm-modal-actions">
+        <button class="confirm-modal-button confirm-modal-button-cancel" id="confirm-modal-cancel">
+          Cancelar
+        </button>
+        <button class="confirm-modal-button confirm-modal-button-confirm" id="confirm-modal-confirm">
+          Eliminar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Sistema de modal de confirmación personalizado
+    let confirmModalResolve = null;
+
+    function showConfirmModal(message) {
+      return new Promise((resolve) => {
+        confirmModalResolve = resolve;
+        const overlay = document.getElementById('confirm-modal-overlay');
+        const messageEl = document.getElementById('confirm-modal-message');
+        
+        messageEl.textContent = message;
+        overlay.classList.add('active');
+
+        // Prevenir scroll del body cuando el modal está abierto
+        document.body.style.overflow = 'hidden';
+      });
+    }
+
+    function hideConfirmModal() {
+      const overlay = document.getElementById('confirm-modal-overlay');
+      overlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    // Event listeners para los botones del modal
+    document.getElementById('confirm-modal-cancel').addEventListener('click', () => {
+      if (confirmModalResolve) {
+        confirmModalResolve(false);
+        confirmModalResolve = null;
+      }
+      hideConfirmModal();
+    });
+
+    document.getElementById('confirm-modal-confirm').addEventListener('click', () => {
+      if (confirmModalResolve) {
+        confirmModalResolve(true);
+        confirmModalResolve = null;
+      }
+      hideConfirmModal();
+    });
+
+    // Cerrar modal al hacer clic en el overlay (fuera del modal)
+    document.getElementById('confirm-modal-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'confirm-modal-overlay') {
+        if (confirmModalResolve) {
+          confirmModalResolve(false);
+          confirmModalResolve = null;
+        }
+        hideConfirmModal();
+      }
+    });
+
+    // Cerrar modal con tecla Escape
+    document.addEventListener('keydown', (e) => {
+      const overlay = document.getElementById('confirm-modal-overlay');
+      if (e.key === 'Escape' && overlay.classList.contains('active')) {
+        if (confirmModalResolve) {
+          confirmModalResolve(false);
+          confirmModalResolve = null;
+        }
+        hideConfirmModal();
+      }
     });
   </script>
 </body>
