@@ -3,6 +3,7 @@ import { CampaignServiceWrapper } from "../../../infrastructure/services/adapter
 import { SegmentRepositoryMongo } from "../../../infrastructure/db/repositories/SegmentRepositoryMongo.js";
 import { TenantRepositoryMongo } from "../../../infrastructure/db/repositories/TenantRepositoryMongo.js";
 import { CampaignFilterService } from "../../../infrastructure/services/core/campaign-filter.service.js";
+import { CampaignSentModel } from "../../../infrastructure/db/models/campaign-sent.model.js";
 import { getTenantBrandName } from "../../../domain/utils/tenant-helpers.js";
 
 /**
@@ -115,6 +116,37 @@ export class CampaignController {
         jwtTokenLength: payload.jwtToken?.length || 0,
         payloadSizeBytes: payloadSize,
       });
+
+      // 4.5. Validar límite de campañas por semana ANTES de crear la campaña
+      const canales = payload.canales || segment.canalesOrigen || ["email"];
+      const hasWhatsApp = canales.some(c => c.toLowerCase().includes('whatsapp') || c.toLowerCase().includes('wa'));
+      const channel = hasWhatsApp ? 'WHATSAPP' : 'EMAIL';
+      
+      // Consultar directamente el modelo para contar campañas únicas esta semana
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      const campaignsThisWeek = await CampaignSentModel.distinct("campaignId", {
+        tenantId: tenantId,
+        channel: channel,
+        sentAt: { $gte: oneWeekAgo },
+        campaignId: { $ne: null }, // Solo contar campañas con ID válido
+      });
+      
+      const campaignCount = campaignsThisWeek.length;
+      const maxCampaigns = channel === "EMAIL" ? 2 : 1; // 2 emails/semana, 1 WhatsApp/semana
+      
+      if (campaignCount >= maxCampaigns) {
+        console.warn(`[CampaignController] ⚠️ Límite de campañas alcanzado: ${campaignCount}/${maxCampaigns} esta semana`);
+        return res.status(429).json(
+          createResponse(
+            false,
+            `Has alcanzado el límite de ${maxCampaigns} campaña${maxCampaigns > 1 ? 's' : ''} de ${channel} por semana. Ya has creado ${campaignCount} esta semana. Intenta nuevamente la próxima semana.`
+          )
+        );
+      }
+
+      console.log(`[CampaignController] ✅ Límite de campañas OK: ${campaignCount}/${maxCampaigns} esta semana`);
 
       // 5. Llamar al segundo backend
       console.log("[CampaignController] 📞 Llamando al servicio de campañas...");

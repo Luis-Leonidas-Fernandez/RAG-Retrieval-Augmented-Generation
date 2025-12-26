@@ -7,7 +7,7 @@ import { CampaignSentModel } from "../../db/models/campaign-sent.model.js";
 export class CampaignFilterService {
   /**
    * Filtra clientes que pueden recibir campañas de email
-   * Límite: máximo 1 campaña por semana
+   * Límite: menos de 2 campañas esta semana (0 o 1 campaña)
    * @param {string} tenantId - ID del tenant
    * @param {Array} clientes - Array de objetos con { email, name, vehicle, phone }
    * @param {number} limit - Límite máximo de clientes a retornar (default: 200)
@@ -17,27 +17,46 @@ export class CampaignFilterService {
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Obtener emails que ya recibieron campaña de email esta semana
+    // Obtener todos los envíos de email esta semana con campaignId
     const sentThisWeek = await CampaignSentModel.find({
       tenantId: tenantId,
       channel: "EMAIL",
       sentAt: { $gte: oneWeekAgo },
-    }).select("email");
+      campaignId: { $ne: null }, // Solo contar campañas con ID válido
+    }).select("email campaignId");
 
-    const excludedEmails = new Set(
-      sentThisWeek.map((item) => item.email.toLowerCase())
-    );
+    // Contar cuántas campañas únicas (por campaignId) ha recibido cada cliente
+    const campaignCountByEmail = new Map();
+    
+    sentThisWeek.forEach((item) => {
+      const email = item.email.toLowerCase();
+      if (!campaignCountByEmail.has(email)) {
+        campaignCountByEmail.set(email, new Set());
+      }
+      // Agregar campaignId al set (automáticamente elimina duplicados)
+      if (item.campaignId) {
+        campaignCountByEmail.get(email).add(item.campaignId);
+      }
+    });
 
-    // Filtrar clientes que no están en la lista de excluidos
+    // Filtrar clientes que tienen menos de 2 campañas (0 o 1 campaña)
     const eligible = clientes
       .filter((cliente) => {
         const email = (cliente.email || "").toLowerCase().trim();
-        return email && !excludedEmails.has(email);
+        if (!email) return false;
+        
+        const campaignCount = campaignCountByEmail.has(email)
+          ? campaignCountByEmail.get(email).size
+          : 0;
+        
+        // Incluir solo clientes con menos de 2 campañas
+        return campaignCount < 2;
       })
       .slice(0, limit);
 
+    const excludedCount = clientes.length - eligible.length;
     console.log(
-      `[CampaignFilterService] Email: ${clientes.length} total, ${excludedEmails.size} excluidos, ${eligible.length} elegibles`
+      `[CampaignFilterService] Email: ${clientes.length} total, ${excludedCount} excluidos (2+ campañas), ${eligible.length} elegibles (menos de 2 campañas)`
     );
 
     return eligible;
@@ -45,7 +64,7 @@ export class CampaignFilterService {
 
   /**
    * Filtra clientes que pueden recibir campañas de WhatsApp
-   * Límite: máximo 1 campaña por semana
+   * Límite: menos de 2 campañas esta semana (0 o 1 campaña)
    * @param {string} tenantId - ID del tenant
    * @param {Array} clientes - Array de objetos con { email, name, vehicle, phone }
    * @param {number} limit - Límite máximo de clientes a retornar (default: 200)
@@ -55,27 +74,46 @@ export class CampaignFilterService {
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Obtener emails que ya recibieron campaña de WhatsApp esta semana
+    // Obtener todos los envíos de WhatsApp esta semana con campaignId
     const sentThisWeek = await CampaignSentModel.find({
       tenantId: tenantId,
       channel: "WHATSAPP",
       sentAt: { $gte: oneWeekAgo },
-    }).select("email");
+      campaignId: { $ne: null }, // Solo contar campañas con ID válido
+    }).select("email campaignId");
 
-    const excludedEmails = new Set(
-      sentThisWeek.map((item) => item.email.toLowerCase())
-    );
+    // Contar cuántas campañas únicas (por campaignId) ha recibido cada cliente
+    const campaignCountByEmail = new Map();
+    
+    sentThisWeek.forEach((item) => {
+      const email = item.email.toLowerCase();
+      if (!campaignCountByEmail.has(email)) {
+        campaignCountByEmail.set(email, new Set());
+      }
+      // Agregar campaignId al set (automáticamente elimina duplicados)
+      if (item.campaignId) {
+        campaignCountByEmail.get(email).add(item.campaignId);
+      }
+    });
 
-    // Filtrar clientes que no están en la lista de excluidos
+    // Filtrar clientes que tienen menos de 2 campañas (0 o 1 campaña)
     const eligible = clientes
       .filter((cliente) => {
         const email = (cliente.email || "").toLowerCase().trim();
-        return email && !excludedEmails.has(email);
+        if (!email) return false;
+        
+        const campaignCount = campaignCountByEmail.has(email)
+          ? campaignCountByEmail.get(email).size
+          : 0;
+        
+        // Incluir solo clientes con menos de 2 campañas
+        return campaignCount < 2;
       })
       .slice(0, limit);
 
+    const excludedCount = clientes.length - eligible.length;
     console.log(
-      `[CampaignFilterService] WhatsApp: ${clientes.length} total, ${excludedEmails.size} excluidos, ${eligible.length} elegibles`
+      `[CampaignFilterService] WhatsApp: ${clientes.length} total, ${excludedCount} excluidos (2+ campañas), ${eligible.length} elegibles (menos de 2 campañas)`
     );
 
     return eligible;
