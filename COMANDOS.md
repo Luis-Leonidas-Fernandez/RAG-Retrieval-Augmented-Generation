@@ -83,6 +83,10 @@ cd /Users/luis/Desktop/vector-database-rag
 npm install
 ```
 
+**Ver MongoDB (Producción):**
+docker exec -it mongo-rag mongosh vector-db-rag
+
+
 ### 3. Levantar servicios Docker
 
 #### 3.1 Docker Compose (recomendado)
