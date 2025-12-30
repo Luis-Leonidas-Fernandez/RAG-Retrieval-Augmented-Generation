@@ -12,6 +12,31 @@ export class ExtractStructuredDataUseCase {
   }
 
   /**
+   * Limpia un valor de columna, removiendo pipes adicionales y datos concatenados
+   * @param {string} value - Valor a limpiar
+   * @returns {string} Valor limpio
+   */
+  cleanColumnValue(value) {
+    if (!value) return '';
+    let cleaned = String(value).trim();
+    
+    // Si el valor contiene pipes, probablemente es un error de parsing
+    // Tomar solo la primera parte antes del primer pipe adicional
+    if (cleaned.includes('|')) {
+      const parts = cleaned.split('|').map(p => p.trim()).filter(p => p);
+      // Si hay múltiples partes separadas por pipes, tomar solo la primera
+      if (parts.length > 1) {
+        cleaned = parts[0];
+      } else {
+        // Si solo hay una parte pero contiene el pipe, removerlo
+        cleaned = cleaned.replace(/\|/g, '').trim();
+      }
+    }
+    
+    return cleaned;
+  }
+
+  /**
    * Ejecuta la extracción de datos estructurados
    * @param {string} tenantId - ID del tenant
    * @param {string} pdfId - ID del PDF
@@ -47,21 +72,31 @@ export class ExtractStructuredDataUseCase {
 
     if (fullText) {
       // Filas tipo: | CLIENTE | EMAIL | COMPRO_VEHICULO | TELEFONO |
+      // Regex mejorado: usa [^|] en lugar de .*? para evitar capturar pipes dentro de las columnas
       const rowRegex =
-        /^\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*$/gm;
+        /^\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$/gm;
       let match;
       let matchCount = 0;
 
       while ((match = rowRegex.exec(fullText)) !== null) {
         matchCount++;
-        const col1 = match[1].trim(); // CLIENTE / NOMBRE
-        const col2 = match[2].trim(); // EMAIL
-        const col3 = match[3].trim(); // COMPRO_VEHICULO
-        const col4 = match[4].trim(); // TELEFONO
+        // Limpiar cada columna para evitar datos concatenados
+        const col1 = this.cleanColumnValue(match[1]); // CLIENTE / NOMBRE
+        const col2 = this.cleanColumnValue(match[2]); // EMAIL
+        const col3 = this.cleanColumnValue(match[3]); // COMPRO_VEHICULO
+        const col4 = this.cleanColumnValue(match[4]); // TELEFONO
 
         // Log de las primeras 3 filas encontradas
         if (matchCount <= 3) {
           console.log(`[ExtractStructuredData] Fila ${matchCount} encontrada:`, { col1, col2, col3, col4 });
+        }
+
+        // Validar que las columnas no estén vacías después de limpiar
+        if (!col1 || !col2) {
+          if (matchCount <= 5) {
+            console.log(`[ExtractStructuredData] Fila ${matchCount} omitida: col1 o col2 vacías después de limpiar`);
+          }
+          continue;
         }
 
         // Saltar cabecera
@@ -125,10 +160,10 @@ export class ExtractStructuredDataUseCase {
           // Agregar todas las ocurrencias encontradas
           for (const triplet of triplets) {
             structuredData.push({
-              name: triplet.name,
-              email: triplet.email,
-              vehicle: triplet.vehicle || "",
-              phone: triplet.phone || "",
+              name: this.cleanColumnValue(triplet.name),
+              email: this.cleanColumnValue(triplet.email),
+              vehicle: this.cleanColumnValue(triplet.vehicle || ""),
+              phone: this.cleanColumnValue(triplet.phone || ""),
             });
           }
         } else {
@@ -137,8 +172,8 @@ export class ExtractStructuredDataUseCase {
           if (pairs && pairs.length > 0) {
             for (const pair of pairs) {
               structuredData.push({
-                name: pair.name,
-                email: pair.email,
+                name: this.cleanColumnValue(pair.name),
+                email: this.cleanColumnValue(pair.email),
                 vehicle: "",
                 phone: "",
               });

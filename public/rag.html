@@ -1452,6 +1452,49 @@
     }
 
     /**
+     * Escapa caracteres HTML especiales para prevenir inyección y romper estructura
+     * @param {string} str - Cadena a escapar
+     * @returns {string} Cadena escapada
+     */
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      const text = String(str);
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    /**
+     * Limpia un valor, detectando y removiendo datos concatenados con pipes
+     * @param {string} value - Valor a limpiar
+     * @returns {string} Valor limpio
+     */
+    function cleanValue(value) {
+      if (value === null || value === undefined) return '';
+      let cleaned = String(value).trim();
+      
+      // Si el valor contiene pipes, probablemente es un error de parsing
+      // Tomar solo la primera parte antes del primer pipe adicional
+      if (cleaned.includes('|')) {
+        const parts = cleaned.split('|').map(p => p.trim()).filter(p => p);
+        // Si hay múltiples partes separadas por pipes, tomar solo la primera
+        if (parts.length > 1) {
+          cleaned = parts[0];
+        } else {
+          // Si solo hay una parte pero contiene el pipe, removerlo
+          cleaned = cleaned.replace(/\|/g, '').trim();
+        }
+      }
+      
+      return cleaned;
+    }
+
+    /**
      * Renderiza datos estructurados como tabla HTML
      * @param {Array<Object>} structuredData - Array de objetos con datos estructurados
      * @param {number} totalRows - Total de filas encontradas
@@ -1470,22 +1513,32 @@
         }
       });
 
-      // Mantener el orden original: usar la primera fila como referencia
-      // y agregar cualquier columna adicional que aparezca en otras filas
+      // Orden preferente de columnas
+      const preferredOrder = ['name', 'email', 'vehicle', 'phone'];
+      
+      // Construir orden de columnas: primero las preferidas, luego el resto
       let columns = [];
-      if (structuredData.length > 0 && structuredData[0] && typeof structuredData[0] === 'object') {
-        // Orden de la primera fila
-        const firstRowKeys = Object.keys(structuredData[0]);
-        columns = [...firstRowKeys];
-        
-        // Agregar columnas adicionales que no estén en la primera fila
-        allColumns.forEach(col => {
-          if (!columns.includes(col)) {
-            columns.push(col);
-          }
-        });
-      } else {
-        // Fallback: si no hay primera fila válida, usar orden alfabético
+      const remainingColumns = [];
+      
+      // Agregar columnas en orden preferente si existen
+      preferredOrder.forEach(col => {
+        if (allColumns.has(col)) {
+          columns.push(col);
+        }
+      });
+      
+      // Agregar columnas adicionales que no estén en el orden preferente
+      allColumns.forEach(col => {
+        if (!preferredOrder.includes(col) && !columns.includes(col)) {
+          remainingColumns.push(col);
+        }
+      });
+      
+      // Ordenar columnas restantes alfabéticamente y agregarlas
+      columns = [...columns, ...remainingColumns.sort()];
+      
+      // Fallback: si no hay columnas, usar orden alfabético de todas
+      if (columns.length === 0) {
         columns = Array.from(allColumns).sort();
       }
 
@@ -1511,8 +1564,12 @@
       structuredData.forEach(row => {
         tableHTML += '<tr>';
         columns.forEach(col => {
-          const value = row[col] !== null && row[col] !== undefined ? String(row[col]) : '';
-          tableHTML += `<td>${value}</td>`;
+          const rawValue = row[col] !== null && row[col] !== undefined ? String(row[col]) : '';
+          // Limpiar el valor antes de escapar
+          const cleanedValue = cleanValue(rawValue);
+          // Escapar caracteres HTML para prevenir inyección y romper estructura
+          const escapedValue = escapeHtml(cleanedValue);
+          tableHTML += `<td>${escapedValue}</td>`;
         });
         tableHTML += '</tr>';
       });
@@ -2092,6 +2149,9 @@
         createCampaignBtn.addEventListener('click', async () => {
           try {
             const segmentId = currentSegmentCandidate.segmentId;
+            console.log('[Crear Campaña] Segment ID:', segmentId);
+            console.log('[Crear Campaña] Current Segment Candidate:', currentSegmentCandidate);
+            
             if (!segmentId) {
               if (segmentStatusEl) {
                 segmentStatusEl.textContent = 'No hay un segmento disponible. Crea el segmento antes de iniciar la campaña.';
@@ -2108,6 +2168,8 @@
             const payload = {
               segmentId,
             };
+            
+            console.log('[Crear Campaña] Payload enviado:', JSON.stringify(payload, null, 2));
 
             const resCamp = await fetchWithAuth('/api/campaigns/start-from-segment', {
               method: 'POST',
@@ -2115,13 +2177,25 @@
               body: JSON.stringify(payload),
             });
 
-            const campData = await resCamp.json().catch(() => ({
-              ok: false,
-              message: 'Error al crear campaña',
-            }));
+            console.log('[Crear Campaña] Response status:', resCamp.status);
+            console.log('[Crear Campaña] Response ok:', resCamp.ok);
+            console.log('[Crear Campaña] Response headers:', Object.fromEntries(resCamp.headers.entries()));
+
+            const campData = await resCamp.json().catch((err) => {
+              console.error('[Crear Campaña] Error al parsear JSON:', err);
+              return {
+                ok: false,
+                message: 'Error al crear campaña',
+              };
+            });
+
+            console.log('[Crear Campaña] Datos recibidos (campData):', JSON.stringify(campData, null, 2));
+            console.log('[Crear Campaña] campData.ok:', campData.ok);
+            console.log('[Crear Campaña] campData.data:', campData.data);
 
             if (!resCamp.ok || !campData.ok) {
               const message = campData.message || 'Error al crear campaña';
+              console.error('[Crear Campaña] Error en respuesta:', message);
               throw new Error(message);
             }
 
@@ -2129,6 +2203,9 @@
               (campData.data && campData.data.campaign && (campData.data.campaign._id || campData.data.campaign.id)) ||
               (campData.data && (campData.data.campaignId || campData.data.id)) ||
               null;
+            
+            console.log('[Crear Campaña] Campaign ID extraído:', campaignId);
+            console.log('[Crear Campaña] Estructura completa de campData.data:', campData.data);
 
             if (segmentStatusEl) {
               segmentStatusEl.textContent =

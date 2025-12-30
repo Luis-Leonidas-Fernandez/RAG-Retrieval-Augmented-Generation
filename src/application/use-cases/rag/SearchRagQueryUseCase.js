@@ -154,50 +154,10 @@ export class SearchRagQueryUseCase {
 
         // 2. Calcular resumen en JS
         const totalRows = structuredDataFull.length;
-        
-        // Contar repeticiones por nombre para el resumen
-        const nameCounts = {};
-        structuredDataFull.forEach(item => {
-          if (item.name) {
-            const normalizedName = normalizeName(item.name);
-            nameCounts[normalizedName] = (nameCounts[normalizedName] || 0) + 1;
-          }
-        });
 
-        // Obtener top 10 nombres más repetidos
-        const topNames = Object.entries(nameCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([name, count]) => ({ name, count }));
-
-        // Seleccionar 5-10 filas de ejemplo
-        const exampleRows = structuredDataFull.slice(0, Math.min(10, structuredDataFull.length));
-
-        // Crear resumen para el LLM (formato textual, no estructurado)
-        let summaryText = `Encontré ${totalRows} registros en el documento. `;
-        if (topNames.length > 0) {
-          summaryText += `Los nombres más repetidos son: `;
-          summaryText += topNames.slice(0, 3).map(t => `${t.name} (${t.count} veces)`).join(", ");
-          if (topNames.length > 3) {
-            summaryText += `, y ${topNames.length - 3} más.`;
-          }
-        }
-        if (exampleRows.length > 0) {
-          summaryText += ` Algunos ejemplos de registros encontrados incluyen: `;
-          const examplesText = exampleRows.slice(0, 3).map(row => {
-            const parts = [];
-            if (row.name) parts.push(row.name);
-            if (row.email) parts.push(`con email ${row.email}`);
-            if (row.vehicle) parts.push(`y vehículo ${row.vehicle}`);
-            return parts.join(' ');
-          }).join('; ');
-          summaryText += examplesText;
-          if (exampleRows.length > 3) {
-            summaryText += `, entre otros.`;
-          } else {
-            summaryText += `.`;
-          }
-        }
+        // Crear resumen SIMPLIFICADO para el LLM (solo total, sin información narrativa)
+        // Esto evita que el LLM genere respuestas narrativas con nombres y ejemplos
+        let summaryText = `Se encontraron ${totalRows} registros en el documento.`;
 
         // 2.1. Aplicar filtrado de campañas si es necesario
         let filteredData = structuredDataFull;

@@ -72,3 +72,6 @@ out/
 .npm
 .eslintcache
 .stylelintcache
+
+# Docker Compose para desarrollo local
+docker-compose.local.yml

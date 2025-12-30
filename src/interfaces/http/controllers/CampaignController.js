@@ -149,6 +149,15 @@ export class CampaignController {
         tiempoTotal: `${callElapsed}ms`,
       });
 
+      // Preparar respuesta final
+      const finalResponse = createResponse(true, result.message || "Campaña creada e iniciada correctamente", {
+        campaign: result.data,
+      });
+      
+      console.log("[CampaignController] 📤 Respuesta completa que se enviará al frontend:", JSON.stringify(finalResponse, null, 2));
+      console.log("[CampaignController] 📤 Estructura de result.data:", JSON.stringify(result.data, null, 2));
+      console.log("[CampaignController] 📤 Keys de result.data:", result.data ? Object.keys(result.data) : []);
+
       // 6. (Opcional) Registrar envíos de campaña para tracking
       if (result.ok && result.data?.campaignId && segment?.clientes && Array.isArray(segment.clientes)) {
         try {
@@ -179,11 +188,7 @@ export class CampaignController {
         }
       }
 
-      return res.status(201).json(
-        createResponse(true, result.message || "Campaña creada e iniciada correctamente", {
-          campaign: result.data,
-        })
-      );
+      return res.status(201).json(finalResponse);
     } catch (error) {
       const safeTenantId = req?.user?.tenantId;
       const safeUserId = req?.user?.id;

@@ -12,7 +12,11 @@
     "docker:down": "docker stop qdrant-rag redis-rag",
     "docker:network:create": "docker network create vector-rag-network 2>/dev/null || echo 'Red vector-rag-network ya existe'",
     "docker:compose:up": "npm run docker:network:create && docker-compose up -d",
-    "docker:compose:down": "docker-compose down"
+    "docker:compose:down": "docker-compose down",
+    "docker:local:up": "docker network create vector-rag-network 2>/dev/null || true && docker compose -f docker-compose.local.yml up -d",
+    "docker:local:down": "docker compose -f docker-compose.local.yml down",
+    "docker:local:rebuild": "docker network create vector-rag-network 2>/dev/null || true && docker compose -f docker-compose.local.yml up -d --build",
+    "docker:local:logs": "docker compose -f docker-compose.local.yml logs -f app"
   },
   "engines": {
     "node": ">=18.0.0"

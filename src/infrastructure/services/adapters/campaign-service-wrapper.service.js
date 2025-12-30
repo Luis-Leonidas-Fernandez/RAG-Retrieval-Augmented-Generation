@@ -124,6 +124,10 @@ export class CampaignServiceWrapper {
       console.log(`[CampaignServiceWrapper]   - SegmentId: ${data.data?.segmentId || 'N/A'}`);
       console.log(`[CampaignServiceWrapper]   - Estado: ${data.data?.estado || 'N/A'}`);
       console.log(`[CampaignServiceWrapper]   - Tiempo total: ${elapsed}ms`);
+      console.log(`[CampaignServiceWrapper] 📋 Respuesta completa del servicio de campañas:`, JSON.stringify(data, null, 2));
+      console.log(`[CampaignServiceWrapper] 📋 Estructura de data.data:`, JSON.stringify(data.data, null, 2));
+      console.log(`[CampaignServiceWrapper] 📋 Keys de data:`, Object.keys(data));
+      console.log(`[CampaignServiceWrapper] 📋 Keys de data.data:`, data.data ? Object.keys(data.data) : []);
 
       return data;
     } catch (error) {
