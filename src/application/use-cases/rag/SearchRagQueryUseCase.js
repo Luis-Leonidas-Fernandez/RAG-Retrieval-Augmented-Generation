@@ -141,7 +141,7 @@ export class SearchRagQueryUseCase {
         });
 
         // 1. Extraer datos estructurados
-        const structuredDataFull = await this.extractStructuredDataUseCase.execute(tenantId, pdfId, question);
+        let structuredDataFull = await this.extractStructuredDataUseCase.execute(tenantId, pdfId, question);
 
         // 1.1. Validar datos extraídos
         if (!structuredDataFull || structuredDataFull.length === 0) {
@@ -494,7 +494,7 @@ export class SearchRagQueryUseCase {
             tenantId,
             sourceDocId: pdfId,
             descripcionQuery: question,
-            canalesOrigen: ["EMAIL"],
+            canalesOrigen: [], // Array vacío - el usuario debe seleccionar explícitamente el canal
             imageUrlPromo: null,
             clientes,
           };
