@@ -1922,14 +1922,14 @@
               <div id="segment-image-status" class="segment-image-status"></div>
             </div>
           </div>
-          <!-- Modal de validación de campaña -->
+          <!-- Modal de validación de campaña/segmento -->
           <div id="campaign-validation-modal" class="campaign-validation-modal">
             <div class="campaign-validation-modal-content">
               <h3 class="campaign-validation-modal-title">
                 <span>⚠️</span>
-                <span>Faltan datos para crear la campaña</span>
+                <span id="campaign-validation-modal-title-text">Faltan datos para crear la campaña</span>
               </h3>
-              <p class="campaign-validation-modal-description">
+              <p class="campaign-validation-modal-description" id="campaign-validation-modal-description-text">
                 Para crear una campaña, necesitas completar los siguientes campos:
               </p>
               <ul id="campaign-validation-list" class="campaign-validation-list"></ul>
@@ -2002,6 +2002,11 @@
             currentSegmentCandidate.canalesOrigen = channels;
             updateChannelsInCache(channels);
             updateChannelUI();
+            
+            // Actualizar estado del botón "Crear segmento" cuando cambian los canales
+            if (updateCreateSegmentButtonState) {
+              updateCreateSegmentButtonState();
+            }
           });
         });
 
@@ -2166,11 +2171,9 @@
                 segmentStatusEl.style.color = '#22c55e';
               }
 
-              // Habilitar el botón de crear segmento ahora que hay al menos una imagen
-              const createSegmentBtnRef = document.getElementById('create-segment-btn');
-              if (createSegmentBtnRef && currentSegmentCandidate.imageUrlsPromo.length > 0) {
-                createSegmentBtnRef.disabled = false;
-                createSegmentBtnRef.title = '';
+              // Actualizar estado del botón "Crear segmento" después de subir imagen
+              if (updateCreateSegmentButtonState) {
+                updateCreateSegmentButtonState();
               }
 
               closeModal();
@@ -2195,6 +2198,9 @@
 
       let lastMissingFields = []; // Guardar para enfoque automático
 
+      // Función helper para actualizar el estado del botón "Crear segmento" (debe estar en scope superior)
+      let updateCreateSegmentButtonState = null; // Se inicializará más adelante
+
       // Función helper para validación de imagen
       function hasValidImage(segmentCandidate) {
         if (!segmentCandidate) return false;
@@ -2218,8 +2224,18 @@
       }
 
       // Función para mostrar el modal de validación
-      function showValidationModal(missingFields) {
+      function showValidationModal(missingFields, title = 'Faltan datos para crear la campaña', description = 'Para crear una campaña, necesitas completar los siguientes campos:') {
         if (!campaignValidationModal || !campaignValidationList) return;
+        
+        // Actualizar el título y descripción del modal
+        const titleEl = document.getElementById('campaign-validation-modal-title-text');
+        const descriptionEl = document.getElementById('campaign-validation-modal-description-text');
+        if (titleEl) {
+          titleEl.textContent = title;
+        }
+        if (descriptionEl) {
+          descriptionEl.textContent = description;
+        }
         
         // Guardar campos faltantes para enfoque automático
         lastMissingFields = missingFields || [];
@@ -2282,21 +2298,72 @@
       if (createSegmentBtn && currentSegmentCandidate) {
         const segmentStatusEl = document.getElementById('segment-status');
 
-        // Inicialmente, exigir que exista al menos una imagen antes de permitir crear el segmento
-        const hasImage =
-          !!(currentSegmentCandidate.imageUrlPromo && currentSegmentCandidate.imageUrlPromo.trim()) ||
-          (Array.isArray(currentSegmentCandidate.imageUrlsPromo) &&
-            currentSegmentCandidate.imageUrlsPromo.length > 0);
-        if (!hasImage) {
-          createSegmentBtn.disabled = true;
-          createSegmentBtn.title = 'Primero sube una imagen para este segmento.';
-        } else {
-          createSegmentBtn.disabled = false;
-          createSegmentBtn.title = '';
-        }
+        // Función helper para actualizar el estado del botón "Crear segmento"
+        updateCreateSegmentButtonState = function() {
+          if (!createSegmentBtn || !currentSegmentCandidate) return;
+          
+          const hasImage = hasValidImage(currentSegmentCandidate);
+          
+          // Validar Canal
+          const channels = Array.isArray(currentSegmentCandidate.canalesOrigen) 
+            ? currentSegmentCandidate.canalesOrigen.filter(ch => {
+                if (!ch || ch === null || ch === undefined || ch === '') return false;
+                const chLower = ch.toString().toLowerCase();
+                return chLower === 'email' || chLower === 'whatsapp';
+              })
+            : [];
+          const hasChannels = channels.length > 0;
+
+          if (!hasImage || !hasChannels) {
+            createSegmentBtn.disabled = true;
+            let message = 'Para crear el segmento necesitas: ';
+            const missing = [];
+            if (!hasChannels) missing.push('seleccionar un canal');
+            if (!hasImage) missing.push('subir una imagen');
+            message += missing.join(' y ');
+            createSegmentBtn.title = message;
+          } else {
+            createSegmentBtn.disabled = false;
+            createSegmentBtn.title = '';
+          }
+        };
+
+        // Inicializar estado del botón
+        updateCreateSegmentButtonState();
 
         createSegmentBtn.addEventListener('click', async () => {
           try {
+            // Validar campos requeridos antes de crear el segmento
+            const missingFields = [];
+            
+            // Validar Canal
+            const channels = Array.isArray(currentSegmentCandidate.canalesOrigen) 
+              ? currentSegmentCandidate.canalesOrigen.filter(ch => {
+                  if (!ch || ch === null || ch === undefined || ch === '') return false;
+                  const chLower = ch.toString().toLowerCase();
+                  return chLower === 'email' || chLower === 'whatsapp';
+                })
+              : [];
+            if (channels.length === 0) {
+              missingFields.push('Canal: Debes seleccionar al menos un canal (Email o WhatsApp).');
+            }
+            
+            // Validar Imagen
+            if (!hasValidImage(currentSegmentCandidate)) {
+              missingFields.push('Imagen: Debes subir al menos una imagen promocional para el segmento.');
+            }
+            
+            // Si faltan campos, mostrar modal y detener ejecución
+            if (missingFields.length > 0) {
+              showValidationModal(
+                missingFields, 
+                'Faltan datos para crear el segmento',
+                'Para crear un segmento, necesitas completar los siguientes campos:'
+              );
+              return;
+            }
+            
+            // Si todos los campos están completos, continuar con creación
             createSegmentBtn.disabled = true;
             createSegmentBtn.textContent = 'Creando segmento...';
 
@@ -2381,7 +2448,11 @@
                 'Canal: Debes seleccionar al menos un canal (Email o WhatsApp).',
                 'Imagen: Debes subir al menos una imagen promocional para la campaña.'
               ];
-              showValidationModal(missingFields);
+              showValidationModal(
+                missingFields,
+                'Faltan datos para crear la campaña',
+                'Para crear una campaña, necesitas completar los siguientes campos:'
+              );
               return;
             }
 
@@ -2421,7 +2492,11 @@
             // D. Si faltan campos, mostrar modal y detener ejecución
             if (missingFields.length > 0) {
               console.log('[Validación] Mostrando modal de validación con campos faltantes');
-              showValidationModal(missingFields);
+              showValidationModal(
+                missingFields,
+                'Faltan datos para crear la campaña',
+                'Para crear una campaña, necesitas completar los siguientes campos:'
+              );
               return;
             }
 
