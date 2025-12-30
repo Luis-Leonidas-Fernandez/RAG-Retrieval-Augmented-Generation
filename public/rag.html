@@ -1868,10 +1868,7 @@
           return value;
         };
         let uiChannels = rawChannels.map(mapLabel).filter(Boolean);
-        // Si no hay nada, default a Email
-        if (uiChannels.length === 0) {
-          uiChannels = ['Email'];
-        }
+        // NO establecer valor por defecto - el usuario DEBE seleccionar explícitamente un canal
         // Eliminar duplicados
         uiChannels = Array.from(new Set(uiChannels));
         currentSegmentCandidate.canalesOrigen = uiChannels;
@@ -2391,6 +2388,9 @@
             // C. Validación de campos (en orden: Segmento → Canal → Imagen)
             const missingFields = [];
 
+            console.log('[Validación] currentSegmentCandidate:', currentSegmentCandidate);
+            console.log('[Validación] canalesOrigen:', currentSegmentCandidate.canalesOrigen);
+
             // 1. Validar Segmento
             const segmentId = currentSegmentCandidate.segmentId;
             if (!segmentId) {
@@ -2399,8 +2399,14 @@
 
             // 2. Validar Canal
             const channels = Array.isArray(currentSegmentCandidate.canalesOrigen) 
-              ? currentSegmentCandidate.canalesOrigen.filter(ch => ch != null && ch !== '')
+              ? currentSegmentCandidate.canalesOrigen.filter(ch => {
+                  // Filtrar valores válidos: no null, no undefined, no string vacío, y debe ser 'Email' o 'WhatsApp'
+                  if (!ch || ch === null || ch === undefined || ch === '') return false;
+                  const chLower = ch.toString().toLowerCase();
+                  return chLower === 'email' || chLower === 'whatsapp';
+                })
               : [];
+            console.log('[Validación] Canales filtrados:', channels);
             if (channels.length === 0) {
               missingFields.push('Canal: Debes seleccionar al menos un canal (Email o WhatsApp).');
             }
@@ -2410,11 +2416,16 @@
               missingFields.push('Imagen: Debes subir al menos una imagen promocional para la campaña.');
             }
 
+            console.log('[Validación] Campos faltantes:', missingFields);
+
             // D. Si faltan campos, mostrar modal y detener ejecución
             if (missingFields.length > 0) {
+              console.log('[Validación] Mostrando modal de validación con campos faltantes');
               showValidationModal(missingFields);
               return;
             }
+
+            console.log('[Validación] Todos los campos están completos, continuando con creación de campaña');
 
             // E. Si todos los campos están completos, continuar con creación
             isCreatingCampaign = true;
