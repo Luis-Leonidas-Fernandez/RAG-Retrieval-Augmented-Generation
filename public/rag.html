@@ -2333,6 +2333,10 @@
 
         createSegmentBtn.addEventListener('click', async () => {
           try {
+            console.log('[Validación Segmento] Iniciando validación...');
+            console.log('[Validación Segmento] currentSegmentCandidate:', currentSegmentCandidate);
+            console.log('[Validación Segmento] canalesOrigen:', currentSegmentCandidate?.canalesOrigen);
+            
             // Validar campos requeridos antes de crear el segmento
             const missingFields = [];
             
@@ -2344,24 +2348,33 @@
                   return chLower === 'email' || chLower === 'whatsapp';
                 })
               : [];
+            console.log('[Validación Segmento] Canales filtrados:', channels);
             if (channels.length === 0) {
               missingFields.push('Canal: Debes seleccionar al menos un canal (Email o WhatsApp).');
             }
             
             // Validar Imagen
-            if (!hasValidImage(currentSegmentCandidate)) {
+            const hasImage = hasValidImage(currentSegmentCandidate);
+            console.log('[Validación Segmento] Tiene imagen válida:', hasImage);
+            if (!hasImage) {
               missingFields.push('Imagen: Debes subir al menos una imagen promocional para el segmento.');
             }
             
+            console.log('[Validación Segmento] Campos faltantes:', missingFields);
+            
             // Si faltan campos, mostrar modal y detener ejecución
             if (missingFields.length > 0) {
+              console.log('[Validación Segmento] Mostrando modal de validación');
               showValidationModal(
                 missingFields, 
                 'Faltan datos para crear el segmento',
                 'Para crear un segmento, necesitas completar los siguientes campos:'
               );
-              return;
+              console.log('[Validación Segmento] Modal mostrado, retornando sin crear segmento');
+              return; // IMPORTANTE: Detener ejecución aquí
             }
+            
+            console.log('[Validación Segmento] Todos los campos están completos, continuando con creación');
             
             // Si todos los campos están completos, continuar con creación
             createSegmentBtn.disabled = true;
