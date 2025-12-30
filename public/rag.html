@@ -679,6 +679,118 @@
       color: var(--text-muted);
     }
 
+    /* Modal para validación de campaña */
+    .campaign-validation-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1500;
+      padding: 20px;
+    }
+
+    .campaign-validation-modal-content {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 20px 24px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .campaign-validation-modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 12px;
+      color: #fca5a5;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .campaign-validation-modal-description {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0 0 16px;
+      line-height: 1.5;
+    }
+
+    .campaign-validation-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 20px;
+    }
+
+    .campaign-validation-item {
+      padding: 10px 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-left: 3px solid #ef4444;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--text-main);
+    }
+
+    .campaign-validation-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .campaign-validation-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .campaign-validation-close-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+
+    .campaign-validation-close-btn:hover {
+      background: rgba(15, 23, 42, 1);
+      border-color: rgba(148, 163, 184, 0.5);
+    }
+
+    @media (max-width: 768px) {
+      .campaign-validation-modal {
+        padding: 16px;
+      }
+
+      .campaign-validation-modal-content {
+        padding: 18px 20px;
+        max-width: 100%;
+      }
+
+      .campaign-validation-modal-title {
+        font-size: 15px;
+      }
+
+      .campaign-validation-item {
+        font-size: 12px;
+        padding: 8px 10px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .campaign-validation-modal {
+        padding: 12px;
+      }
+
+      .campaign-validation-modal-content {
+        padding: 16px 18px;
+      }
+    }
+
     .channel-selector {
       margin-top: 12px;
       position: relative;
@@ -1813,6 +1925,24 @@
               <div id="segment-image-status" class="segment-image-status"></div>
             </div>
           </div>
+          <!-- Modal de validación de campaña -->
+          <div id="campaign-validation-modal" class="campaign-validation-modal">
+            <div class="campaign-validation-modal-content">
+              <h3 class="campaign-validation-modal-title">
+                <span>⚠️</span>
+                <span>Faltan datos para crear la campaña</span>
+              </h3>
+              <p class="campaign-validation-modal-description">
+                Para crear una campaña, necesitas completar los siguientes campos:
+              </p>
+              <ul id="campaign-validation-list" class="campaign-validation-list"></ul>
+              <div class="campaign-validation-actions">
+                <button type="button" id="campaign-validation-close-btn" class="campaign-validation-close-btn">
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
         `;
       }
 
@@ -2061,6 +2191,97 @@
         }
       }
 
+      // Configurar modal de validación de campaña (listeners únicos)
+      const campaignValidationModal = document.getElementById('campaign-validation-modal');
+      const campaignValidationList = document.getElementById('campaign-validation-list');
+      const campaignValidationCloseBtn = document.getElementById('campaign-validation-close-btn');
+
+      let lastMissingFields = []; // Guardar para enfoque automático
+
+      // Función helper para validación de imagen
+      function hasValidImage(segmentCandidate) {
+        if (!segmentCandidate) return false;
+        
+        // Verificar imageUrlPromo (string)
+        const imageUrlPromo = segmentCandidate.imageUrlPromo;
+        if (imageUrlPromo && typeof imageUrlPromo === 'string' && imageUrlPromo.trim().length > 0) {
+          return true;
+        }
+        
+        // Verificar imageUrlsPromo (array)
+        const imageUrlsPromo = segmentCandidate.imageUrlsPromo;
+        if (Array.isArray(imageUrlsPromo) && imageUrlsPromo.length > 0) {
+          // Verificar que al menos un elemento sea una URL válida (no vacía, no null)
+          return imageUrlsPromo.some(url => 
+            url && typeof url === 'string' && url.trim().length > 0
+          );
+        }
+        
+        return false;
+      }
+
+      // Función para mostrar el modal de validación
+      function showValidationModal(missingFields) {
+        if (!campaignValidationModal || !campaignValidationList) return;
+        
+        // Guardar campos faltantes para enfoque automático
+        lastMissingFields = missingFields || [];
+        
+        // Limpiar lista anterior
+        campaignValidationList.innerHTML = '';
+        
+        // Insertar cada campo faltante
+        missingFields.forEach(field => {
+          const li = document.createElement('li');
+          li.className = 'campaign-validation-item';
+          li.textContent = field;
+          campaignValidationList.appendChild(li);
+        });
+        
+        // Mostrar modal
+        campaignValidationModal.style.display = 'flex';
+      }
+
+      // Función para ocultar el modal y enfocar control relevante
+      function hideValidationModal() {
+        if (!campaignValidationModal) return;
+        
+        campaignValidationModal.style.display = 'none';
+        
+        // Enfoque automático al control relevante según el primer campo faltante
+        if (lastMissingFields.length > 0) {
+          const firstField = lastMissingFields[0].toLowerCase();
+          
+          if (firstField.includes('segmento')) {
+            // Enfocar botón "Crear segmento"
+            const createSegmentBtn = document.getElementById('create-segment-btn');
+            createSegmentBtn?.focus();
+          } else if (firstField.includes('canal')) {
+            // Enfocar selector de canales
+            const channelDropdownBtn = document.getElementById('channel-dropdown-btn');
+            channelDropdownBtn?.focus();
+          } else if (firstField.includes('imagen')) {
+            // Enfocar botón "Subir imagen"
+            const uploadSegmentImageBtn = document.getElementById('upload-segment-image-btn');
+            uploadSegmentImageBtn?.focus();
+          }
+        }
+      }
+
+      // Registrar listeners una sola vez
+      if (campaignValidationCloseBtn) {
+        campaignValidationCloseBtn.addEventListener('click', hideValidationModal);
+      }
+
+      if (campaignValidationModal) {
+        campaignValidationModal.addEventListener('click', (e) => {
+          // Cerrar al hacer click fuera del contenido
+          if (e.target === campaignValidationModal) {
+            hideValidationModal();
+          }
+        });
+      }
+
       if (createSegmentBtn && currentSegmentCandidate) {
         const segmentStatusEl = document.getElementById('segment-status');
 
@@ -2139,6 +2360,7 @@
       // Botón para crear/iniciar campaña a partir del segmento
       if (createCampaignBtn && currentSegmentCandidate) {
         const segmentStatusEl = document.getElementById('segment-status');
+        let isCreatingCampaign = false; // Estado de loading para prevenir doble click
 
         const hasSegmentId = !!currentSegmentCandidate.segmentId;
         if (!hasSegmentId) {
@@ -2148,21 +2370,59 @@
 
         createCampaignBtn.addEventListener('click', async () => {
           try {
-            const segmentId = currentSegmentCandidate.segmentId;
-            console.log('[Crear Campaña] Segment ID:', segmentId);
+            // A. Validar estado de loading
+            if (isCreatingCampaign) {
+              return; // Ya está en proceso, prevenir doble click
+            }
+
             console.log('[Crear Campaña] Current Segment Candidate:', currentSegmentCandidate);
             
-            if (!segmentId) {
-              if (segmentStatusEl) {
-                segmentStatusEl.textContent = 'No hay un segmento disponible. Crea el segmento antes de iniciar la campaña.';
-                segmentStatusEl.style.color = '#ef4444';
-              }
+            // B. Validar currentSegmentCandidate
+            if (!currentSegmentCandidate || currentSegmentCandidate === null || currentSegmentCandidate === undefined) {
+              const missingFields = [
+                'Segmento: Debes crear el segmento antes de iniciar la campaña.',
+                'Canal: Debes seleccionar al menos un canal (Email o WhatsApp).',
+                'Imagen: Debes subir al menos una imagen promocional para la campaña.'
+              ];
+              showValidationModal(missingFields);
               return;
             }
 
+            // C. Validación de campos (en orden: Segmento → Canal → Imagen)
+            const missingFields = [];
+
+            // 1. Validar Segmento
+            const segmentId = currentSegmentCandidate.segmentId;
+            if (!segmentId) {
+              missingFields.push('Segmento: Debes crear el segmento antes de iniciar la campaña.');
+            }
+
+            // 2. Validar Canal
+            const channels = Array.isArray(currentSegmentCandidate.canalesOrigen) 
+              ? currentSegmentCandidate.canalesOrigen.filter(ch => ch != null && ch !== '')
+              : [];
+            if (channels.length === 0) {
+              missingFields.push('Canal: Debes seleccionar al menos un canal (Email o WhatsApp).');
+            }
+
+            // 3. Validar Imagen (usar función helper)
+            if (!hasValidImage(currentSegmentCandidate)) {
+              missingFields.push('Imagen: Debes subir al menos una imagen promocional para la campaña.');
+            }
+
+            // D. Si faltan campos, mostrar modal y detener ejecución
+            if (missingFields.length > 0) {
+              showValidationModal(missingFields);
+              return;
+            }
+
+            // E. Si todos los campos están completos, continuar con creación
+            isCreatingCampaign = true;
             const originalText = createCampaignBtn.textContent;
             createCampaignBtn.disabled = true;
             createCampaignBtn.textContent = 'Creando campaña...';
+
+            console.log('[Crear Campaña] Segment ID:', segmentId);
 
             // Payload mínimo para iniciar campaña; ajusta endpoint/estructura según tu backend
             const payload = {
@@ -2274,8 +2534,12 @@
                 `;
               }
             }
+          } finally {
+            // Restaurar estado al finalizar (éxito o error)
+            isCreatingCampaign = false;
             createCampaignBtn.disabled = false;
             createCampaignBtn.textContent = '🚀 Crear campaña';
+          }
           }
         });
       }
