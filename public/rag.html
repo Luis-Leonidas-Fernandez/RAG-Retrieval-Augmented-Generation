@@ -1757,8 +1757,6 @@
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
-
-        console.log(`Excel descargado: ${filename}`);
       } catch (error) {
         console.error('Error al descargar Excel:', error);
         alert(`Error al descargar Excel: ${error.message}`);
@@ -2333,10 +2331,6 @@
 
         createSegmentBtn.addEventListener('click', async () => {
           try {
-            console.log('[Validación Segmento] Iniciando validación...');
-            console.log('[Validación Segmento] currentSegmentCandidate:', currentSegmentCandidate);
-            console.log('[Validación Segmento] canalesOrigen:', currentSegmentCandidate?.canalesOrigen);
-            
             // Validar campos requeridos antes de crear el segmento
             const missingFields = [];
             
@@ -2348,33 +2342,24 @@
                   return chLower === 'email' || chLower === 'whatsapp';
                 })
               : [];
-            console.log('[Validación Segmento] Canales filtrados:', channels);
             if (channels.length === 0) {
               missingFields.push('Canal: Debes seleccionar al menos un canal (Email o WhatsApp).');
             }
             
             // Validar Imagen
-            const hasImage = hasValidImage(currentSegmentCandidate);
-            console.log('[Validación Segmento] Tiene imagen válida:', hasImage);
-            if (!hasImage) {
+            if (!hasValidImage(currentSegmentCandidate)) {
               missingFields.push('Imagen: Debes subir al menos una imagen promocional para el segmento.');
             }
             
-            console.log('[Validación Segmento] Campos faltantes:', missingFields);
-            
             // Si faltan campos, mostrar modal y detener ejecución
             if (missingFields.length > 0) {
-              console.log('[Validación Segmento] Mostrando modal de validación');
               showValidationModal(
                 missingFields, 
                 'Faltan datos para crear el segmento',
                 'Para crear un segmento, necesitas completar los siguientes campos:'
               );
-              console.log('[Validación Segmento] Modal mostrado, retornando sin crear segmento');
-              return; // IMPORTANTE: Detener ejecución aquí
+              return;
             }
-            
-            console.log('[Validación Segmento] Todos los campos están completos, continuando con creación');
             
             // Si todos los campos están completos, continuar con creación
             createSegmentBtn.disabled = true;
@@ -2451,8 +2436,6 @@
             if (isCreatingCampaign) {
               return; // Ya está en proceso, prevenir doble click
             }
-
-            console.log('[Crear Campaña] Current Segment Candidate:', currentSegmentCandidate);
             
             // B. Validar currentSegmentCandidate
             if (!currentSegmentCandidate || currentSegmentCandidate === null || currentSegmentCandidate === undefined) {
@@ -2472,9 +2455,6 @@
             // C. Validación de campos (en orden: Segmento → Canal → Imagen)
             const missingFields = [];
 
-            console.log('[Validación] currentSegmentCandidate:', currentSegmentCandidate);
-            console.log('[Validación] canalesOrigen:', currentSegmentCandidate.canalesOrigen);
-
             // 1. Validar Segmento
             const segmentId = currentSegmentCandidate.segmentId;
             if (!segmentId) {
@@ -2490,7 +2470,6 @@
                   return chLower === 'email' || chLower === 'whatsapp';
                 })
               : [];
-            console.log('[Validación] Canales filtrados:', channels);
             if (channels.length === 0) {
               missingFields.push('Canal: Debes seleccionar al menos un canal (Email o WhatsApp).');
             }
@@ -2500,11 +2479,8 @@
               missingFields.push('Imagen: Debes subir al menos una imagen promocional para la campaña.');
             }
 
-            console.log('[Validación] Campos faltantes:', missingFields);
-
             // D. Si faltan campos, mostrar modal y detener ejecución
             if (missingFields.length > 0) {
-              console.log('[Validación] Mostrando modal de validación con campos faltantes');
               showValidationModal(
                 missingFields,
                 'Faltan datos para crear la campaña',
@@ -2513,22 +2489,16 @@
               return;
             }
 
-            console.log('[Validación] Todos los campos están completos, continuando con creación de campaña');
-
             // E. Si todos los campos están completos, continuar con creación
             isCreatingCampaign = true;
             const originalText = createCampaignBtn.textContent;
             createCampaignBtn.disabled = true;
             createCampaignBtn.textContent = 'Creando campaña...';
 
-            console.log('[Crear Campaña] Segment ID:', segmentId);
-
             // Payload mínimo para iniciar campaña; ajusta endpoint/estructura según tu backend
             const payload = {
               segmentId,
             };
-            
-            console.log('[Crear Campaña] Payload enviado:', JSON.stringify(payload, null, 2));
 
             const resCamp = await fetchWithAuth('/api/campaigns/start-from-segment', {
               method: 'POST',
@@ -2536,25 +2506,16 @@
               body: JSON.stringify(payload),
             });
 
-            console.log('[Crear Campaña] Response status:', resCamp.status);
-            console.log('[Crear Campaña] Response ok:', resCamp.ok);
-            console.log('[Crear Campaña] Response headers:', Object.fromEntries(resCamp.headers.entries()));
-
             const campData = await resCamp.json().catch((err) => {
-              console.error('[Crear Campaña] Error al parsear JSON:', err);
+              console.error('Error al parsear JSON de respuesta de campaña:', err);
               return {
                 ok: false,
                 message: 'Error al crear campaña',
               };
             });
 
-            console.log('[Crear Campaña] Datos recibidos (campData):', JSON.stringify(campData, null, 2));
-            console.log('[Crear Campaña] campData.ok:', campData.ok);
-            console.log('[Crear Campaña] campData.data:', campData.data);
-
             if (!resCamp.ok || !campData.ok) {
               const message = campData.message || 'Error al crear campaña';
-              console.error('[Crear Campaña] Error en respuesta:', message);
               throw new Error(message);
             }
 
@@ -2562,9 +2523,6 @@
               (campData.data && campData.data.campaign && (campData.data.campaign._id || campData.data.campaign.id)) ||
               (campData.data && (campData.data.campaignId || campData.data.id)) ||
               null;
-            
-            console.log('[Crear Campaña] Campaign ID extraído:', campaignId);
-            console.log('[Crear Campaña] Estructura completa de campData.data:', campData.data);
 
             if (segmentStatusEl) {
               segmentStatusEl.textContent =

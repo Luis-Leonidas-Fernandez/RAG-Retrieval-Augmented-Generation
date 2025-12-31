@@ -15,8 +15,6 @@ export class CampaignServiceWrapper {
   constructor() {
     this.serviceUrl = process.env.CAMPAIGN_SERVICE_URL || "http://api:3000";
     this.timeout = parseInt(process.env.CAMPAIGN_SERVICE_TIMEOUT || "30000", 10); // 30 segundos por defecto
-    
-    console.log(`[CampaignServiceWrapper] Inicializado - URL: ${this.serviceUrl}, Timeout: ${this.timeout}ms`);
   }
 
   /**
@@ -28,18 +26,6 @@ export class CampaignServiceWrapper {
   async createCampaignFromRag(jwtToken, payload) {
     const startTime = Date.now();
     const endpoint = `${this.serviceUrl}/api/campaigns/from-rag`;
-    
-    console.log(`[CampaignServiceWrapper] 🚀 Iniciando creación de campaña desde segmento RAG`);
-    console.log(`[CampaignServiceWrapper] 📍 Endpoint: ${endpoint}`);
-    console.log(`[CampaignServiceWrapper] ⏱️ Timeout configurado: ${this.timeout}ms`);
-    console.log(`[CampaignServiceWrapper] 📦 Payload resumen:`, {
-      segmentId: payload.segmentId,
-      nombreCampaña: payload.nombreCampaña,
-      canales: payload.canales,
-      hasPlantillaEmail: !!payload.plantillaEmail,
-      hasJwtToken: !!payload.jwtToken,
-      payloadSize: JSON.stringify(payload).length,
-    });
 
     try {
       const controller = new AbortController();
@@ -49,42 +35,11 @@ export class CampaignServiceWrapper {
         console.error(`[CampaignServiceWrapper] ❌ TIMEOUT después de ${elapsed}ms (límite: ${this.timeout}ms)`);
       }, this.timeout);
 
-      console.log(`[CampaignServiceWrapper] 📡 Enviando request HTTP POST a ${endpoint}...`);
-      
-      // Verificar y mostrar que el JWT está en el payload
-      if (payload.jwtToken) {
-        console.log(`[CampaignServiceWrapper] 🔑 JWT incluido en el payload:`, {
-          presente: true,
-          longitud: payload.jwtToken.length,
-          preview: `${payload.jwtToken.substring(0, 20)}...${payload.jwtToken.substring(payload.jwtToken.length - 10)}`,
-          partes: payload.jwtToken.split('.').length, // JWT tiene 3 partes separadas por puntos
-        });
-      } else {
+      if (!payload.jwtToken) {
         console.error(`[CampaignServiceWrapper] ⚠️ ADVERTENCIA: jwtToken NO está presente en el payload`);
       }
-      
-      // También mostrar el JWT del header
-      console.log(`[CampaignServiceWrapper] 🔐 JWT en header Authorization:`, {
-        presente: !!jwtToken,
-        longitud: jwtToken?.length || 0,
-        preview: jwtToken ? `${jwtToken.substring(0, 20)}...${jwtToken.substring(jwtToken.length - 10)}` : 'N/A',
-      });
-      
-      const requestBody = JSON.stringify(payload);
-      console.log(`[CampaignServiceWrapper] 📏 Tamaño del body: ${requestBody.length} bytes`);
-      
-      // Verificar que el jwtToken está en el JSON serializado
-      const bodyIncludesJwt = requestBody.includes('jwtToken');
-      console.log(`[CampaignServiceWrapper] ✅ Verificación: jwtToken ${bodyIncludesJwt ? 'SÍ' : 'NO'} está incluido en el body serializado`);
 
-      // 📧 LOGS ANTES DE LLAMAR AL MAILER
-      console.log(`[CampaignServiceWrapper] 📧 ====== LLAMANDO A MAILER PARA CREAR CAMPAÑA ======`);
-      console.log(`[CampaignServiceWrapper] 📧 Payload recibido (antes de serializar):`, payload);
-      console.log(`[CampaignServiceWrapper] 📧 Payload.jwtToken existe?:`, !!payload.jwtToken);
-      console.log(`[CampaignServiceWrapper] 📧 Payload.jwtToken valor:`, payload.jwtToken);
-      console.log(`[CampaignServiceWrapper] 📧 Payload serializado (requestBody):`, requestBody);
-      console.log(`[CampaignServiceWrapper] 📧 JWT en header Authorization:`, jwtToken);
-      console.log(`[CampaignServiceWrapper] 📧 ====== FIN LOGS ANTES DE LLAMAR A MAILER ======`);
+      const requestBody = JSON.stringify(payload);
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -99,36 +54,16 @@ export class CampaignServiceWrapper {
 
       clearTimeout(timeoutId);
       const elapsed = Date.now() - startTime;
-      
-      console.log(`[CampaignServiceWrapper] 📥 Respuesta recibida en ${elapsed}ms`);
-      console.log(`[CampaignServiceWrapper] 📊 Status HTTP: ${response.status} ${response.statusText}`);
-      console.log(`[CampaignServiceWrapper] 📋 Headers de respuesta:`, {
-        contentType: response.headers.get('content-type'),
-        contentLength: response.headers.get('content-length'),
-      });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[CampaignServiceWrapper] ❌ Error HTTP ${response.status}:`);
-        console.error(`[CampaignServiceWrapper]   - Status: ${response.status} ${response.statusText}`);
+        console.error(`[CampaignServiceWrapper] ❌ Error HTTP ${response.status}: ${response.statusText}`);
         console.error(`[CampaignServiceWrapper]   - Body: ${errorText.substring(0, 500)}${errorText.length > 500 ? '...' : ''}`);
         console.error(`[CampaignServiceWrapper]   - Tiempo transcurrido: ${elapsed}ms`);
         throw new Error(`Error del servicio de campañas (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
-      console.log(`[CampaignServiceWrapper] ✅ Campaña creada exitosamente:`);
-      console.log(`[CampaignServiceWrapper]   - OK: ${data.ok}`);
-      console.log(`[CampaignServiceWrapper]   - Mensaje: ${data.message || 'N/A'}`);
-      console.log(`[CampaignServiceWrapper]   - CampaignId: ${data.data?.campaignId || 'N/A'}`);
-      console.log(`[CampaignServiceWrapper]   - SegmentId: ${data.data?.segmentId || 'N/A'}`);
-      console.log(`[CampaignServiceWrapper]   - Estado: ${data.data?.estado || 'N/A'}`);
-      console.log(`[CampaignServiceWrapper]   - Tiempo total: ${elapsed}ms`);
-      console.log(`[CampaignServiceWrapper] 📋 Respuesta completa del servicio de campañas:`, JSON.stringify(data, null, 2));
-      console.log(`[CampaignServiceWrapper] 📋 Estructura de data.data:`, JSON.stringify(data.data, null, 2));
-      console.log(`[CampaignServiceWrapper] 📋 Keys de data:`, Object.keys(data));
-      console.log(`[CampaignServiceWrapper] 📋 Keys de data.data:`, data.data ? Object.keys(data.data) : []);
-
       return data;
     } catch (error) {
       const elapsed = Date.now() - startTime;

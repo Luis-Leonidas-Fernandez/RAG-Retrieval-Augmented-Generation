@@ -24,15 +24,9 @@ export class CampaignController {
    */
   async startFromSegment(req, res) {
     try {
-      console.log("[CampaignController] 📥 Request startFromSegment recibido");
       const { tenantId, id: userId } = req.user;
       const { segmentId } = req.body;
       const jwtToken = req.headers.authorization?.replace("Bearer ", "") || null;
-
-      console.log("[CampaignController] TenantId:", tenantId);
-      console.log("[CampaignController] UserId:", userId);
-      console.log("[CampaignController] SegmentId:", segmentId);
-      console.log("[CampaignController] JWT disponible:", !!jwtToken);
 
       // 1. Validaciones iniciales
       if (!segmentId) {
@@ -51,7 +45,6 @@ export class CampaignController {
       }
 
       // 3. Obtener el segmento desde MongoDB para construir el payload
-      console.log("[CampaignController] 🔍 Buscando segmento en MongoDB...");
       const segment = await this.segmentRepository.findById(tenantId, segmentId);
       
       if (!segment) {
@@ -61,12 +54,6 @@ export class CampaignController {
         );
       }
 
-      console.log("[CampaignController] ✅ Segmento encontrado:", {
-        segmentId: segment._id?.toString() || segment.id,
-        descripcionQuery: segment.descripcionQuery,
-        clientesCount: Array.isArray(segment.clientes) ? segment.clientes.length : 0,
-        imageUrlPromoCount: Array.isArray(segment.imageUrlPromo) ? segment.imageUrlPromo.length : 0,
-      });
       // Obtener tenant para determinar brandName efectivo
       let tenant = null;
       try {
@@ -78,19 +65,11 @@ export class CampaignController {
       const brandName = getTenantBrandName(tenant);
 
       // 4. Construir payload para el segundo backend
-      console.log("[CampaignController] 🔨 Construyendo payload para servicio de campañas...");
       const nombreCampaña = `Promos ${brandName} del mes`;
       const primeraImagen =
         Array.isArray(segment.imageUrlPromo) && segment.imageUrlPromo.length > 0
           ? segment.imageUrlPromo[0]
           : null;
-
-      console.log("[CampaignController] 📋 Datos del segmento para payload:", {
-        nombreCampaña,
-        canalesOrigen: segment.canalesOrigen,
-        tieneImagen: !!primeraImagen,
-        imagenUrl: primeraImagen ? primeraImagen.substring(0, 50) + "..." : null,
-      });
 
       const payload = {
         segmentId: segment._id?.toString() || segment.id,
@@ -106,57 +85,18 @@ export class CampaignController {
         }),
       };
 
-      const payloadSize = JSON.stringify(payload).length;
-      console.log("[CampaignController] 📤 Payload construido para servicio de campañas:", {
-        segmentId: payload.segmentId,
-        nombreCampaña: payload.nombreCampaña,
-        canales: payload.canales,
-        hasPlantillaEmail: !!payload.plantillaEmail,
-        hasJwtToken: !!payload.jwtToken,
-        jwtTokenLength: payload.jwtToken?.length || 0,
-        payloadSizeBytes: payloadSize,
-      });
-
       // 4.5. NOTA: La validación de límite de campañas por tenant se eliminó.
       // El límite es por cliente individual (cada cliente puede recibir hasta 2 campañas por semana).
       // El filtrado de clientes en SearchRagQueryUseCase ya asegura que solo se muestren clientes
       // que tienen menos de 2 campañas, por lo que no es necesario validar un límite global por tenant.
 
       // 5. Llamar al segundo backend
-      console.log("[CampaignController] 📞 Llamando al servicio de campañas...");
-      const callStartTime = Date.now();
-      
       const result = await this.campaignService.createCampaignFromRag(jwtToken, payload);
-      
-      const callElapsed = Date.now() - callStartTime;
-      console.log(`[CampaignController] ⏱️ Llamada al servicio de campañas completada en ${callElapsed}ms`);
-
-      console.log("[CampaignController] ✅ Campaña creada exitosamente:", {
-        ok: result.ok,
-        message: result.message,
-        campaignId: result.data?.campaignId,
-        segmentId: result.data?.segmentId,
-        estado: result.data?.estado,
-        dataKeys: result.data ? Object.keys(result.data) : [],
-      });
-
-      console.log("[CampaignController] 📊 Resumen de la operación:", {
-        tenantId,
-        userId,
-        segmentId: payload.segmentId,
-        campaignId: result.data?.campaignId,
-        estado: result.data?.estado,
-        tiempoTotal: `${callElapsed}ms`,
-      });
 
       // Preparar respuesta final
       const finalResponse = createResponse(true, result.message || "Campaña creada e iniciada correctamente", {
         campaign: result.data,
       });
-      
-      console.log("[CampaignController] 📤 Respuesta completa que se enviará al frontend:", JSON.stringify(finalResponse, null, 2));
-      console.log("[CampaignController] 📤 Estructura de result.data:", JSON.stringify(result.data, null, 2));
-      console.log("[CampaignController] 📤 Keys de result.data:", result.data ? Object.keys(result.data) : []);
 
       // 6. (Opcional) Registrar envíos de campaña para tracking
       if (result.ok && result.data?.campaignId && segment?.clientes && Array.isArray(segment.clientes)) {
@@ -179,8 +119,6 @@ export class CampaignController {
               channel,
               result.data.campaignId
             );
-            
-            console.log(`[CampaignController] ✅ Registrados ${emails.length} envíos de campaña (${channel})`);
           }
         } catch (error) {
           // No fallar la respuesta si el registro de envíos falla

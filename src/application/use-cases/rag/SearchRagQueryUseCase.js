@@ -98,8 +98,6 @@ export class SearchRagQueryUseCase {
     const { tenantId, userId, pdfId, question, conversationId, tenantSettings } = ragQueryRequest;
     const { skipStructuredDetection = false } = options;
 
-    console.log(`[RAG] Buscando contexto para pregunta: ${question} (tenantId: ${tenantId})`);
-
     // Usar settings del tenant o defaults
     const maxTokens = tenantSettings?.ragLimits?.maxTokens || this.config.maxTotalTokens;
     const documentPriority = tenantSettings?.ragLimits?.documentPriority || this.config.documentPriority;
@@ -130,27 +128,17 @@ export class SearchRagQueryUseCase {
       // 1.1. DETECTAR Y PROCESAR RESPUESTA ESTRUCTURADA
       // ======================================================
       if (needsStructuredResponse(question)) {
-        console.log(`[RAG] Pregunta detectada como requerimiento de respuesta estructurada`);
-
         // Verificar si el documento es tabular
         const isTabular = this.isTabularDocument(pdf);
-        console.log(`[RAG] isTabularDocument: ${isTabular}`, {
-          originalName: pdf?.originalName,
-          mimetype: pdf?.mimetype,
-          documentKind: pdf?.documentKind
-        });
 
         // 1. Extraer datos estructurados
         let structuredDataFull = await this.extractStructuredDataUseCase.execute(tenantId, pdfId, question);
 
         // 1.1. Validar datos extraídos
         if (!structuredDataFull || structuredDataFull.length === 0) {
-          console.log(`[RAG] No se encontraron datos estructurados, haciendo fallback al flujo RAG normal`);
           // Fallback: Volver al flujo RAG normal (SIN volver a verificar needsStructuredResponse())
           return await this.executeNormalRagOnly(ragQueryRequest);
         }
-
-        console.log(`[RAG] Datos estructurados encontrados: ${structuredDataFull.length} registros`);
 
         // 2. Calcular resumen en JS
         const totalRows = structuredDataFull.length;
@@ -167,8 +155,6 @@ export class SearchRagQueryUseCase {
         const campaignRequest = isCampaignRequest(question);
         
         if (campaignRequest.isCampaign && this.campaignFilterService && structuredDataFull.length > 0) {
-          console.log(`[RAG] Detectada solicitud de campaña: ${campaignRequest.channel}`);
-          
           // Preparar clientes para filtrado
           const clientesForFilter = structuredDataFull.map(item => ({
             email: item.email || "",
@@ -179,7 +165,6 @@ export class SearchRagQueryUseCase {
 
           try {
             if (campaignRequest.channel === 'EMAIL') {
-              console.log(`[RAG] Filtrando clientes elegibles para campaña EMAIL`);
               const eligible = await this.campaignFilterService.filterEligibleForEmail(
                 tenantId,
                 clientesForFilter,
@@ -195,9 +180,7 @@ export class SearchRagQueryUseCase {
               }));
               
               filteredTotalRows = filteredData.length;
-              console.log(`[RAG] De ${structuredDataFull.length} clientes, ${filteredData.length} son elegibles para email`);
             } else if (campaignRequest.channel === 'WHATSAPP') {
-              console.log(`[RAG] Filtrando clientes elegibles para campaña WHATSAPP`);
               const eligible = await this.campaignFilterService.filterEligibleForWhatsApp(
                 tenantId,
                 clientesForFilter,
@@ -213,12 +196,10 @@ export class SearchRagQueryUseCase {
               }));
               
               filteredTotalRows = filteredData.length;
-              console.log(`[RAG] De ${structuredDataFull.length} clientes, ${filteredData.length} son elegibles para WhatsApp`);
             }
             
             // Si no hay clientes elegibles después del filtrado, retornar respuesta especial
             if (filteredData.length === 0) {
-              console.log(`[RAG] No hay clientes elegibles: todos tienen 2+ campañas esta semana`);
               
               // Construir mensaje de límite alcanzado
               const channel = campaignRequest.channel || 'EMAIL';
@@ -340,11 +321,6 @@ export class SearchRagQueryUseCase {
             if (filteredData.length > 200) {
               filteredData = filteredData.slice(0, 200);
               filteredTotalRows = 200;
-              console.log(`[RAG] Limitado a 200 clientes (truncado)`);
-            }
-            
-            if (filteredData.length < 100 && structuredDataFull.length >= 100) {
-              console.log(`[RAG] Advertencia: Solo ${filteredData.length} clientes elegibles (menos de 100)`);
             }
             
             // Actualizar structuredDataFull con los datos filtrados
@@ -364,8 +340,6 @@ export class SearchRagQueryUseCase {
            (structuredDataFull.length === 0 && totalRows > 0));
         
         if (hasNoEligibleClients) {
-          console.log(`[RAG] Verificación adicional: No hay clientes elegibles después del filtrado (filteredTotalRows=${filteredTotalRows}, structuredDataFull.length=${structuredDataFull.length}, totalRows=${totalRows})`);
-          
           // Construir mensaje de límite alcanzado
           const channel = campaignRequest.channel || 'EMAIL';
           const maxCampaigns = 2; // 2 campañas por semana para EMAIL y WHATSAPP
@@ -677,7 +651,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
   async executeNormalRagOnly(ragQueryRequest) {
     const { tenantId, userId, pdfId, question, conversationId, tenantSettings } = ragQueryRequest;
 
-    console.log(`[RAG] Ejecutando flujo RAG normal para pregunta: ${question}`);
 
     // Usar settings del tenant o defaults
     const maxTokens = tenantSettings?.ragLimits?.maxTokens || this.config.maxTotalTokens;
@@ -705,14 +678,11 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
       
       if (emailMatch) {
         const rawName = emailMatch[3].trim();
-        console.log(`[RAG] → Pregunta detectada como consulta de email: "${rawName}"`);
 
         // Buscar chunk directo en MongoDB
         const chunk = await this.chunkRepository.findChunkByName(tenantId, pdfId, rawName);
         
         if (chunk) {
-          console.log(`[RAG] → Chunk encontrado por búsqueda directa (index: ${chunk.index})`);
-
           // Extraer tripletes Nombre-Email-Vehículo del chunk encontrado
           const pairs = extractNameEmailVehiclePairs(chunk.content);
           const targetNorm = normalizeName(rawName);
@@ -720,10 +690,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
           // Buscar coincidencia en los tripletes extraídos
           for (const p of pairs) {
             if (p.normalized.name.includes(targetNorm) || targetNorm.includes(p.normalized.name)) {
-              console.log(`[RAG] → Email encontrado: ${p.email}`);
-              if (p.vehicle) {
-                console.log(`[RAG] → Vehículo encontrado: ${p.vehicle}`);
-              }
 
               // Obtener o crear conversación activa para la respuesta
               let activeConversationId = conversationId;
@@ -853,9 +819,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
             }
           }
 
-          console.log(`[RAG] ❌ No se encontró email dentro del chunk aunque el nombre estaba presente`);
-        } else {
-          console.log(`[RAG] ❌ No se encontró chunk en Mongo por nombre directo`);
         }
       }
 
@@ -867,14 +830,11 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
       
       if (vehicleMatch) {
         const rawName = vehicleMatch[3].trim();
-        console.log(`[RAG] → Pregunta detectada como consulta de vehículo: "${rawName}"`);
 
         // Buscar chunk directo en MongoDB por vehículo
         const chunk = await this.chunkRepository.findChunkByVehicle(tenantId, pdfId, rawName);
         
         if (chunk) {
-          console.log(`[RAG] → Chunk encontrado por búsqueda directa de vehículo (index: ${chunk.index})`);
-
           // Extraer tripletes Nombre-Email-Vehículo del chunk encontrado
           const pairs = extractNameEmailVehiclePairs(chunk.content);
           const targetNorm = normalizeName(rawName);
@@ -882,8 +842,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
           // Buscar coincidencia en los tripletes extraídos (por vehículo normalizado)
           for (const p of pairs) {
             if (p.normalized.vehicle.includes(targetNorm) || targetNorm.includes(p.normalized.vehicle)) {
-              console.log(`[RAG] → Vehículo encontrado: ${p.vehicle}`);
-              console.log(`[RAG] → Nombre: ${p.name}, Email: ${p.email}`);
 
               // Obtener o crear conversación activa para la respuesta
               let activeConversationId = conversationId;
@@ -1006,10 +964,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
               });
             }
           }
-
-          console.log(`[RAG] ❌ No se encontró vehículo dentro del chunk aunque el término estaba presente`);
-        } else {
-          console.log(`[RAG] ❌ No se encontró chunk en Mongo por vehículo directo`);
         }
       }
 
@@ -1059,7 +1013,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
       if (!isIndexRequest) {
         cachedResponse = await this.cacheService.getCachedRagResponse(tenantId, pdfId, question);
         if (cachedResponse) {
-          console.log(`[RAG] Respuesta obtenida desde caché`);
           // Asegurar que el conversationId sea el activo, no el del caché
           return new RagQueryResponse({
             answer: cachedResponse.answer,
@@ -1068,20 +1021,14 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
             tokens: cachedResponse.tokens,
           });
         }
-      } else {
-        console.log(`[RAG] Solicitud de índice detectada, omitiendo caché para búsqueda fresca`);
       }      
 
       // 4. Generar o recuperar embedding de la pregunta
       questionVector = await this.cacheService.getCachedEmbedding(tenantId, question);
 
       if (!questionVector) {
-        console.log(`[RAG] Generando embedding para pregunta`);
         questionVector = await this.embeddingService.embedText(question);
         await this.cacheService.setCachedEmbedding(tenantId, question, questionVector);
-        console.log(`[RAG] Embedding guardado en caché`);
-      } else {
-        console.log(`[RAG] Embedding obtenido desde caché`);
       }
 
       // 5. Buscar chunks similares en vector store
@@ -1090,89 +1037,14 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
         ? 0.3  // Threshold más bajo para índices (pueden tener formato diferente)
         : this.config.scoreThreshold;
 
-      // 🔍 DIAGNÓSTICO: Buscar primero sin threshold para ver todos los resultados
-      const searchWithoutThreshold = await this.vectorRepository.search(tenantId, pdfId, questionVector, {
-        limit: 50, // Buscar más resultados para diagnóstico
-        scoreThreshold: 0, // Sin threshold para ver todos
-      });
-
-      console.log(`[RAG] 🔍 Diagnóstico: ${searchWithoutThreshold.length} chunks encontrados sin threshold (limit=50)`);
-      
-      // Verificar si el chunk 93 está en los resultados
-      const chunk93Result = searchWithoutThreshold.find(hit => hit.payload.index === 93);
-      if (chunk93Result) {
-        console.log(`[RAG] ✅ Chunk 93 encontrado en Qdrant:`);
-        console.log(`[RAG]   - Score: ${chunk93Result.score.toFixed(4)}`);
-        console.log(`[RAG]   - ChunkId: ${chunk93Result.payload.chunkId}`);
-        console.log(`[RAG]   - Index: ${chunk93Result.payload.index}`);
-        console.log(`[RAG]   - Content preview: "${(chunk93Result.payload.content || '').substring(0, 200)}${(chunk93Result.payload.content || '').length > 200 ? '...' : ''}"`);
-        if (chunk93Result.score < searchScoreThreshold) {
-          console.log(`[RAG] ⚠️  Chunk 93 tiene score ${chunk93Result.score.toFixed(4)} que está por debajo del threshold ${searchScoreThreshold}`);
-        }
-      } else {
-        console.log(`[RAG] ❌ Chunk 93 NO encontrado en Qdrant para esta búsqueda`);
-        // Verificar si el chunk 93 existe en MongoDB
-        const chunk93InMongo = await this.chunkRepository.findByPdfId(tenantId, pdfId, {
-          filters: { index: 93 },
-          limit: 1,
-        });
-        if (chunk93InMongo.length > 0) {
-          console.log(`[RAG] ⚠️  Chunk 93 existe en MongoDB pero NO está en Qdrant:`);
-          console.log(`[RAG]   - ChunkId: ${chunk93InMongo[0]._id}`);
-          console.log(`[RAG]   - Status: ${chunk93InMongo[0].status}`);
-          console.log(`[RAG]   - Content preview: "${(chunk93InMongo[0].content || '').substring(0, 200)}${(chunk93InMongo[0].content || '').length > 200 ? '...' : ''}"`);
-        } else {
-          console.log(`[RAG] ⚠️  Chunk 93 NO existe en MongoDB`);
-        }
-      }
-
-      // Mostrar los top 10 chunks sin threshold para diagnóstico
-      console.log(`[RAG] 🔍 Top 10 chunks encontrados (sin threshold):`);
-      searchWithoutThreshold.slice(0, 10).forEach((hit, idx) => {
-        console.log(`[RAG]   ${idx + 1}. Index: ${hit.payload.index}, Score: ${hit.score.toFixed(4)}, ChunkId: ${hit.payload.chunkId}`);
-      });
-
-      // Buscar específicamente el chunk 93 para ver su score (búsqueda ampliada)
-      console.log(`[RAG] 🔍 Buscando específicamente el chunk 93 para ver su score (búsqueda ampliada a 200 resultados)...`);
-      const searchChunk93 = await this.vectorRepository.search(tenantId, pdfId, questionVector, {
-        limit: 200, // Buscar más resultados para encontrar el chunk 93
-        scoreThreshold: 0, // Sin threshold
-      });
-
-      const chunk93InSearch = searchChunk93.find(hit => hit.payload.index === 93);
-      if (chunk93InSearch) {
-        const chunk93Position = searchChunk93.findIndex(h => h.payload.index === 93) + 1;
-        console.log(`[RAG] ✅ Chunk 93 encontrado en búsqueda ampliada:`);
-        console.log(`[RAG]   - Score: ${chunk93InSearch.score.toFixed(4)}`);
-        console.log(`[RAG]   - Posición en ranking: ${chunk93Position} de ${searchChunk93.length}`);
-        console.log(`[RAG]   - ChunkId: ${chunk93InSearch.payload.chunkId}`);
-        console.log(`[RAG]   - Comparación con top 3:`);
-        searchChunk93.slice(0, 3).forEach((hit, idx) => {
-          const scoreDiff = hit.score - chunk93InSearch.score;
-          console.log(`[RAG]     ${idx + 1}. Index ${hit.payload.index}: score ${hit.score.toFixed(4)} (diferencia: ${scoreDiff > 0 ? '+' : ''}${scoreDiff.toFixed(4)})`);
-        });
-        if (chunk93InSearch.score < searchScoreThreshold) {
-          console.log(`[RAG] ⚠️  Chunk 93 tiene score ${chunk93InSearch.score.toFixed(4)} que está por debajo del threshold ${searchScoreThreshold}`);
-          console.log(`[RAG]   - Por eso no aparece en los resultados finales`);
-        }
-      } else {
-        console.log(`[RAG] ⚠️  Chunk 93 NO encontrado ni siquiera en los primeros 200 resultados`);
-        console.log(`[RAG]   - Esto indica que el embedding del chunk 93 no es similar al de la pregunta`);
-        console.log(`[RAG]   - El chunk 93 está en Qdrant pero su similitud semántica con la pregunta es muy baja`);
-      }
-
-      // Ahora hacer la búsqueda real con threshold
+      // Búsqueda con threshold
       search = await this.vectorRepository.search(tenantId, pdfId, questionVector, {
         limit: this.config.searchLimit,
         scoreThreshold: searchScoreThreshold,
       });
 
-      console.log(`[RAG] Encontrados ${search.length} chunks similares con score >= ${searchScoreThreshold}`);
-
       // 6. Si es solicitud de índice, buscar también en los primeros chunks del documento
       if (isIndexRequest) {
-        console.log(`[RAG] Solicitud de índice detectada, buscando en primeros chunks del documento`);
-        
         // Buscar chunks del inicio del documento (índices suelen estar al principio)
         const earlyChunks = await this.chunkRepository.findByPdfId(tenantId, pdfId, {
           limit: 50, // Primeros 50 chunks (ajustar según necesidad)
@@ -1197,33 +1069,15 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
         
         // Ordenar por índice para mantener orden del documento
         chunks.sort((a, b) => (a.index || 0) - (b.index || 0));
-        
-        console.log(`[RAG] Total de chunks encontrados (vectorial + primeros): ${chunks.length}`);
       } else {
         // 6. Obtener chunkIds y buscar textos en MongoDB (código original)
         const ids = search.map((hit) => hit.payload.chunkId);
         chunks = await this.chunkRepository.findByIds(tenantId, ids, pdfId);
-        
-        // 🔍 DIAGNÓSTICO: Logs detallados de chunks encontrados
-        console.log(`[RAG] 🔍 Diagnóstico: ${chunks.length} chunks obtenidos de MongoDB`);
-        console.log(`[RAG] 🔍 Scores de los chunks encontrados:`);
-        search.forEach((hit, idx) => {
-          const chunk = chunks.find(c => c._id.toString() === hit.payload.chunkId);
-          if (chunk) {
-            console.log(`[RAG]   Chunk ${idx + 1}:`);
-            console.log(`[RAG]     - Score: ${hit.score.toFixed(4)}`);
-            console.log(`[RAG]     - Index: ${chunk.index}`);
-            console.log(`[RAG]     - Page: ${chunk.page}`);
-            console.log(`[RAG]     - Content length: ${(chunk.content || '').length} caracteres`);
-            console.log(`[RAG]     - Content preview: "${(chunk.content || '').substring(0, 200)}${(chunk.content || '').length > 200 ? '...' : ''}"`);
-          }
-        });
       }
 
       // 7. Construir contexto del documento
       if (isIndexRequest) {
         // Lógica actual para índices (mantener sin cambios)
-        console.log(`[RAG] 🔍 Construyendo contexto con ${chunks.length} chunks disponibles`);
         contextText = "";
         usedChunks = [];
         
@@ -1245,10 +1099,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
           contextText += (contextText ? "\n\n" : "") + chunkWithMetadata;
           usedChunks.push(chunk);
         }
-        
-        console.log(`[RAG] 🔍 Contexto construido:`);
-        console.log(`[RAG]   - Chunks usados: ${usedChunks.length}`);
-        console.log(`[RAG]   - Contexto length: ${contextText.length} caracteres`);
         
       } else {
         // -----------------------------------------------------------------------
@@ -1276,7 +1126,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
 
         // Si no hay chunks con score → dejar vacío para que el fallback se active
         if (scoredChunks.length === 0) {
-          console.log("[RAG] scoredChunks vacío → usando fallback.");
           contextText = "";
           usedChunks = [];
         } else {
@@ -1345,13 +1194,11 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
           // 8️⃣ Guardar usedChunks para el response final
           usedChunks = selected.map((s) => s.chunk);
 
-          console.log(`[RAG] Contexto construido con ${selected.length} chunks.`);
         }
       }
 
       // 8. Fallback si no hay chunks
       if (usedChunks.length === 0 || contextText.trim().length === 0) {
-        console.log(`[RAG] No se encontraron chunks similares, usando fallback`);
 
         const fallbackChunks = await this.chunkRepository.findByPdfId(tenantId, pdfId, {
           limit: this.config.fallbackChunksCount,
@@ -1531,9 +1378,6 @@ NO agregues información adicional, nombres, estadísticas, ni explicaciones ext
           tokens: usage,
           conversationId: activeConversationId,
         });
-        console.log(`[RAG] Respuesta guardada en caché`);
-      } else {
-        console.log(`[RAG] Respuesta de índice no cacheada (siempre se busca fresca)`);
       }
 
       return response;
