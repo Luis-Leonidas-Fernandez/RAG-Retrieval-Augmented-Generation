@@ -72,19 +72,43 @@ export class ExtractStructuredDataUseCase {
 
     if (fullText) {
       // Filas tipo: | CLIENTE | EMAIL | COMPRO_VEHICULO | TELEFONO |
-      // Regex mejorado: usa [^|] en lugar de .*? para evitar capturar pipes dentro de las columnas
-      const rowRegex =
-        /^\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$/gm;
-      let match;
+      // Usar split por pipes en lugar de regex para manejar mejor columnas vacías
+      const lines = fullText.split('\n');
       let matchCount = 0;
 
-      while ((match = rowRegex.exec(fullText)) !== null) {
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Solo procesar líneas que empiezan y terminan con pipe
+        if (!trimmedLine.startsWith('|') || !trimmedLine.endsWith('|')) {
+          continue;
+        }
+
+        // Dividir por pipes y limpiar.
+        // Ejemplos:
+        // - 3 columnas: | nombre | email | telefono |
+        // - 4 columnas: | nombre | email | vehiculo | telefono |
+        const parts = trimmedLine.split('|').map((col) => col.trim());
+        // parts típicamente: ["", c1, c2, c3, ... , ""]
+        const cells = parts.length >= 2 ? parts.slice(1, -1) : [];
+        if (cells.length < 3) {
+          continue;
+        }
+
         matchCount++;
-        // Limpiar cada columna para evitar datos concatenados
-        const col1 = this.cleanColumnValue(match[1]); // CLIENTE / NOMBRE
-        const col2 = this.cleanColumnValue(match[2]); // EMAIL
-        const col3 = this.cleanColumnValue(match[3]); // COMPRO_VEHICULO
-        const col4 = this.cleanColumnValue(match[4]); // TELEFONO
+
+        // Mapear dinámicamente 3 o 4+ columnas:
+        // - 3 cols => name,email,phone
+        // - 4+ cols => name,email,vehicle,phone (tomamos la última como phone)
+        const nameRaw = cells[0];
+        const emailRaw = cells[1];
+        const vehicleRaw = cells.length >= 4 ? cells[2] : "";
+        const phoneRaw = cells.length >= 4 ? cells[cells.length - 1] : cells[2];
+
+        const col1 = this.cleanColumnValue(nameRaw); // CLIENTE / NOMBRE
+        const col2 = this.cleanColumnValue(emailRaw); // EMAIL
+        const col3 = this.cleanColumnValue(vehicleRaw); // COMPRO_VEHICULO (puede ser "")
+        const col4 = this.cleanColumnValue(phoneRaw); // TELEFONO
 
         // Log de las primeras 3 filas encontradas
         if (matchCount <= 3) {
@@ -140,7 +164,7 @@ export class ExtractStructuredDataUseCase {
         }
       }
 
-      console.log(`[ExtractStructuredData] Total de matches del regex: ${matchCount}, registros válidos: ${structuredData.length}`);
+      console.log(`[ExtractStructuredData] Total de filas procesadas: ${matchCount}, registros válidos: ${structuredData.length}`);
     }
 
     // 2) Fallback al comportamiento anterior si no se encontró nada con el parser de 4 columnas
